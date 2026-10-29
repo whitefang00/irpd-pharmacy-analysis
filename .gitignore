@@ -1,0 +1,16 @@
+# Data stays local
+/data/
+*.csv
+*.parquet
+*.duckdb
+*.sql
+*.zip
+
+# Python
+__pycache__/
+.venv/
+
+# Secrets
+.env
+
+.DS_Store
