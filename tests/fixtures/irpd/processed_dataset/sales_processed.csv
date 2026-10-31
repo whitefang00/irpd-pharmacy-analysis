@@ -1,0 +1,6 @@
+RowNumber,Date,Time,InvoiceNumber,CashierID,DrugCode,DrugName,Category,Quantity,Unit,UnitPrice,DiscountAmount,Subtotal,PaymentType
+1,2024-01-02,08:00:00,PJ01,Cashier_001,D1,Amoxicillin 500mg,Generik,10,Tab,700,0,7000,TUNAI
+2,2024-01-02,08:05:00,PJ02,Cashier_001,D2,Flazen 50,Patent,1,Strip,30000,0,30000,TUNAI
+3,2024-01-03,09:00:00,PJ03,Cashier_002,D1,Amoxicillin 500mg,Generik,5,Tab,700,0,3500,KARTU
+4,2024-01-04,10:00:00,PJ04,Cashier_002,D1,Amoxicillin 500mg,Generik,5,Tab,700,0,3500,TUNAI
+5,2024-01-04,10:30:00,PJ05,Cashier_002,S1,Jasa Tensi,Jasa,1,Kali,5000,0,5000,TUNAI

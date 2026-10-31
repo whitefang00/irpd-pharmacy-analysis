@@ -1,0 +1,17 @@
+RowNumber,DateTime,Warehouse,DrugCode,DrugName,DocumentNumber,TransactionDescription,InitialStock,StockIn,StockOut,RemainingStock,DrugClass,Category,DrugType,Status
+1,06 Jul 2023 12:00:00,Apotek,B1,Bufacaryl,MTS0,test,5 Tab,0 Tab,1 Tab,4 Tab,-,Patent,NON KONSINYASI,Aktif
+2,06 Jul 2023 12:00:00,Gudang Obat 1,B1,Bufacaryl,MTS0,test,0 Tab,1 Tab,0 Tab,1 Tab,-,Patent,NON KONSINYASI,Aktif
+3,01 Aug 2023 09:00:00,Apotek,B1,Bufacaryl,SO0,Stokopname,4 Tab,0 Tab,2 Tab,2 Tab,-,Patent,NON KONSINYASI,Aktif
+4,01 Aug 2023 09:00:01,Gudang Obat 1,B1,Bufacaryl,SO0,Stokopname,1 Tab,2 Tab,0 Tab,3 Tab,-,Patent,NON KONSINYASI,Aktif
+5,01 May 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,PB1,Pembelian Dari Sup X dengan no faktur PB1,0 Tab,40 Tab,0 Tab,40 Tab,-,Generik,NON KONSINYASI,Aktif
+6,01 May 2025 08:01:00,Apotek,A1,Amoxicillin 500mg,MT1,Mutasi ke Gudang Obat 1,40 Tab,0 Tab,10 Tab,30 Tab,-,Generik,NON KONSINYASI,Aktif
+7,01 May 2025 08:01:00,Gudang Obat 1,A1,Amoxicillin 500mg,MT1,Mutasi dari Apotek,0 Tab,10 Tab,0 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+8,02 May 2025 09:00:00,Apotek,A1,Amoxicillin 500mg,PJ1,Penjualan dengan No Faktur PJ1,30 Tab,0 Tab,28 Tab,2 Tab,-,Generik,NON KONSINYASI,Aktif
+9,20 May 2025 10:00:00,Apotek,A1,Amoxicillin 500mg,PB2,Pembelian Dari Sup Y dengan no faktur PB2,2 Tab,20 Tab,0 Tab,22 Tab,-,Generik,NON KONSINYASI,Aktif
+10,20 May 2025 10:00:01,Apotek,A1,Amoxicillin 500mg,PB2,Pembelian Dari Sup Y dengan no faktur PB2,22 Tab,5 Tab,0 Tab,27 Tab,-,Generik,NON KONSINYASI,Aktif
+11,25 May 2025 11:00:00,Gudang Obat 1,A1,Amoxicillin 500mg,SO1,Stokopname,10 Tab,0 Tab,3 Tab,7 Tab,-,Generik,NON KONSINYASI,Aktif
+12,10 Jun 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,PB3,Pembelian Dari Sup Y dengan no faktur PB3,27 Tab,6 Tab,0 Tab,33 Tab,-,Generik,NON KONSINYASI,Aktif
+13,11 Jun 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,PB3,Pembelian dengan no. faktur: PB3 telah di hapus,33 Tab,0 Tab,6 Tab,27 Tab,-,Generik,NON KONSINYASI,Aktif
+14,15 Jul 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,PB4,Pembelian Dari Sup Z dengan no faktur PB4,27 Tab,100 Tab,0 Tab,127 Tab,-,Generik,NON KONSINYASI,Aktif
+15,20 Jul 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,PB1,Pembelian dengan no. faktur: PB1 telah di hapus,127 Tab,0 Tab,40 Tab,87 Tab,-,Generik,NON KONSINYASI,Aktif
+16,10 Aug 2025 08:00:00,Apotek,A1,Amoxicillin 500mg,SO2,Stokopname,87 Tab,5 Tab,0 Tab,92 Tab,-,Generik,NON KONSINYASI,Aktif

@@ -1,0 +1,7 @@
+RowNumber,Date,Time,InvoiceNumber,CashierID,DrugCode,DrugName,Category,Quantity,Unit,UnitPrice,DiscountAmount,Subtotal,PaymentType
+1,2025-03-01,10:00:00,PJ1,Cashier_001,L1,Lima 500mg,Generik,5,Tab,100,0,500,TUNAI
+2,2025-03-02,10:00:00,PJ2,Cashier_001,L1,Lima 500mg,Generik,5,Tab,120,0,600,TUNAI
+3,2025-03-04,10:00:00,PJ3,Cashier_001,L1,Lima 500mg,Generik,2,Tab,100,0,200,TUNAI
+4,2025-03-05,10:00:00,PJ4,Cashier_001,L1,Lima 500mg,Generik,1,Strip,900,0,900,TUNAI
+5,2025-03-08,10:00:00,PJ5,Cashier_001,L1,Lima 500mg,Generik,8,Tab,100,0,800,TUNAI
+6,2025-03-09,10:00:00,PJ6,Cashier_001,L2,Lido 10mg,Generik,1,Tab,50,0,50,TUNAI

@@ -1,0 +1,17 @@
+RowNumber,Date,Time,DocumentNumber,TransactionType,DrugCode,DrugName,Category,InitialStock,StockIn,StockOut,RemainingStock,Unit
+1,2025-03-01,08:00:00,PB1,Pembelian (Sup A),L1,Lima 500mg,Generik,0,20,0,20,Tab
+2,2025-03-01,08:10:00,MT1,Mutasi,L1,Lima 500mg,Generik,20,0,10,10,Tab
+3,2025-03-01,08:10:00,MT1,Mutasi,L1,Lima 500mg,Generik,0,10,0,10,Tab
+4,2025-03-01,10:00:00,PJ1,Penjualan,L1,Lima 500mg,Generik,10,0,5,5,Tab
+5,2025-03-02,10:00:00,PJ2,Penjualan,L1,Lima 500mg,Generik,5,0,5,0,Tab
+6,2025-03-04,08:00:00,MT2,Mutasi,L1,Lima 500mg,Generik,10,0,10,0,Tab
+7,2025-03-04,08:00:00,MT2,Mutasi,L1,Lima 500mg,Generik,0,10,0,10,Tab
+8,2025-03-04,10:00:00,PJ3,Penjualan,L1,Lima 500mg,Generik,10,0,2,8,Tab
+9,2025-03-05,08:00:00,PB2,Pembelian (Sup A),L1,Lima 500mg,Generik,8,30,0,38,Tab
+10,2025-03-05,08:05:00,PB3,Pembelian (Sup B),L1,Lima 500mg,Generik,38,10,0,48,Tab
+11,2025-03-05,10:00:00,PJ4,Penjualan,L1,Lima 500mg,Generik,48,0,10,38,Tab
+12,2025-03-07,09:00:00,PB2,Pembelian (Unknown Supplier),L1,Lima 500mg,Generik,38,0,30,8,Tab
+13,2025-03-08,10:00:00,PJ5,Penjualan,L1,Lima 500mg,Generik,8,0,8,0,Tab
+14,2025-03-09,08:00:00,PB5,Pembelian (Sup C),L2,Lido 10mg,Generik,0,5,0,5,Tab
+15,2025-03-09,10:00:00,PJ6,Penjualan,L2,Lido 10mg,Generik,5,0,1,4,Tab
+16,2025-03-10,08:00:00,PB4,Pembelian (Sup D),L1,Lima 500mg,Generik,0,20,0,20,Tab

@@ -1,0 +1,10 @@
+RowNumber,Date,Time,InvoiceNumber,CashierID,DrugCode,DrugName,Category,Quantity,Unit,UnitPrice,DiscountAmount,Subtotal,PaymentType
+1,2023-03-01,09:00:00,PJ00,Cashier_001,D1,Delta 30mg,Generik,1,Tab,1000,0,1000,TUNAI
+2,2023-09-20,10:00:00,PJ01,Cashier_001,D1,Delta 30mg,Generik,9,Tab,1000,0,9000,TUNAI
+3,2024-03-02,10:00:00,PJ02,Cashier_001,A1,Alpha 500mg,Generik,5,Tab,1000,0,5000,TUNAI
+4,2024-03-02,11:00:00,PJ03,Cashier_001,B1,Beta syrup,Patent,3,Btl,1000,0,3000,TUNAI
+5,2024-03-05,11:00:00,PJ04,Cashier_001,A1,Alpha 500mg,Generik,15,Tab,1000,0,15000,TUNAI
+6,2024-03-05,12:00:00,PJ05,Cashier_001,C1,Gamma cream,Patent,1,Tube,1000,0,1000,TUNAI
+7,2024-03-08,12:00:00,PJ06,Cashier_001,A1,Alpha 500mg,Generik,4,Tab,1000,0,4000,TUNAI
+8,2024-03-08,11:00:00,PJ07,Cashier_001,A1,Alpha 500mg,Generik,1,Tab,1000,0,1000,TUNAI
+9,2024-03-09,10:00:00,PJ08,Cashier_001,A1,Alpha 500mg,Generik,5,Tab,1000,0,5000,TUNAI

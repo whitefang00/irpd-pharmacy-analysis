@@ -1,0 +1,20 @@
+RowNumber,DateTime,Warehouse,DrugCode,DrugName,DocumentNumber,TransactionDescription,InitialStock,StockIn,StockOut,RemainingStock,DrugClass,Category,DrugType,Status
+1,01 Feb 2023 08:00:00,Apotek,D1,Delta 30mg,PB00,Pembelian Dari PT Satu dengan no faktur PB00,0 Tab,1000 Tab,0 Tab,1000 Tab,-,Generik,NON KONSINYASI,Aktif
+2,01 Mar 2023 09:00:00,Apotek,D1,Delta 30mg,PJ00,Penjualan dengan No Faktur PJ00,1000 Tab,0 Tab,1 Tab,999 Tab,-,Generik,NON KONSINYASI,Aktif
+3,15 Sep 2023 10:00:00,Apotek,D1,Delta 30mg,SO00,Stokopname,999 Tab,0 Tab,990 Tab,9 Tab,-,Generik,NON KONSINYASI,Aktif
+4,20 Sep 2023 10:00:00,Apotek,D1,Delta 30mg,PJ01,Penjualan dengan No Faktur PJ01,9 Tab,0 Tab,9 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+5,03 Oct 2023 08:00:00,Apotek,D1,Delta 30mg,PB01,Pembelian Dari PT Satu dengan no faktur PB01,0 Tab,5 Tab,0 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+6,01 Mar 2024 08:00:00,Apotek,A1,Alpha 500mg,PB02,Pembelian Dari PT Satu dengan no faktur PB02,0 Tab,20 Tab,0 Tab,20 Tab,-,Generik,NON KONSINYASI,Aktif
+7,01 Mar 2024 09:00:00,Apotek,A1,Alpha 500mg,MT01,Mutasi ke Gudang Obat 1,20 Tab,0 Tab,15 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+8,01 Mar 2024 09:00:00,Gudang Obat 1,A1,Alpha 500mg,MT01,Mutasi dari Apotek,0 Tab,15 Tab,0 Tab,15 Tab,-,Generik,NON KONSINYASI,Aktif
+9,02 Mar 2024 10:00:00,Apotek,A1,Alpha 500mg,PJ02,Penjualan dengan No Faktur PJ02,5 Tab,0 Tab,5 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+10,02 Mar 2024 11:00:00,Apotek,B1,Beta syrup,PJ03,Penjualan dengan No Faktur PJ03,0 Btl,0 Btl,3 Btl,-3 Btl,-,Patent,NON KONSINYASI,Aktif
+11,03 Mar 2024 09:00:00,Apotek,B1,Beta syrup,SO01,Stokopname,-3 Btl,5 Btl,0 Btl,2 Btl,-,Patent,NON KONSINYASI,Aktif
+12,04 Mar 2024 08:00:00,Gudang Obat 1,A1,Alpha 500mg,MT02,Mutasi ke Apotek,15 Tab,0 Tab,15 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+13,04 Mar 2024 08:00:00,Apotek,A1,Alpha 500mg,MT02,Mutasi dari Gudang Obat 1,0 Tab,15 Tab,0 Tab,15 Tab,-,Generik,NON KONSINYASI,Aktif
+14,05 Mar 2024 11:00:00,Apotek,A1,Alpha 500mg,PJ04,Penjualan dengan No Faktur PJ04,15 Tab,0 Tab,15 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+15,05 Mar 2024 12:00:00,Apotek,C1,Gamma cream,PJ05,Penjualan dengan No Faktur PJ05,7 Tube,0 Tube,1 Tube,6 Tube,-,Patent,NON KONSINYASI,Aktif
+16,08 Mar 2024 09:00:00,Apotek,A1,Alpha 500mg,PB03,Pembelian Dari PT Dua dengan no faktur PB03,0 Tab,10 Tab,0 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+17,08 Mar 2024 12:00:00,Apotek,A1,Alpha 500mg,PJ06,Penjualan dengan No Faktur PJ06,10 Tab,0 Tab,4 Tab,6 Tab,-,Generik,NON KONSINYASI,Aktif
+18,08 Mar 2024 11:00:00,Apotek,A1,Alpha 500mg,PJ07,Penjualan dengan No Faktur PJ07,6 Tab,0 Tab,1 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+19,09 Mar 2024 10:00:00,Apotek,A1,Alpha 500mg,PJ08,Penjualan dengan No Faktur PJ08,5 Tab,0 Tab,5 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif

@@ -13,4 +13,10 @@ __pycache__/
 # Secrets
 .env
 
+# Local scratch space
+.scratch/
+
 .DS_Store
+
+# Small hand-made test fixtures are committed
+!tests/fixtures/**/*.csv

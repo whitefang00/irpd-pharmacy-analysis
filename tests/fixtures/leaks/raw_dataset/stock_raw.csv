@@ -1,0 +1,17 @@
+RowNumber,DateTime,Warehouse,DrugCode,DrugName,DocumentNumber,TransactionDescription,InitialStock,StockIn,StockOut,RemainingStock,DrugClass,Category,DrugType,Status
+1,01 Mar 2025 08:00:00,Apotek,L1,Lima 500mg,PB1,Pembelian (Sup A),0 Tab,20 Tab,0 Tab,20 Tab,-,Generik,NON KONSINYASI,Aktif
+2,01 Mar 2025 08:10:00,Apotek,L1,Lima 500mg,MT1,Mutasi,20 Tab,0 Tab,10 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+3,01 Mar 2025 08:10:00,Gudang Obat 1,L1,Lima 500mg,MT1,Mutasi,0 Tab,10 Tab,0 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+4,01 Mar 2025 10:00:00,Apotek,L1,Lima 500mg,PJ1,Penjualan,10 Tab,0 Tab,5 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+5,02 Mar 2025 10:00:00,Apotek,L1,Lima 500mg,PJ2,Penjualan,5 Tab,0 Tab,5 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+6,04 Mar 2025 08:00:00,Gudang Obat 1,L1,Lima 500mg,MT2,Mutasi,10 Tab,0 Tab,10 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+7,04 Mar 2025 08:00:00,Apotek,L1,Lima 500mg,MT2,Mutasi,0 Tab,10 Tab,0 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+8,04 Mar 2025 10:00:00,Apotek,L1,Lima 500mg,PJ3,Penjualan,10 Tab,0 Tab,2 Tab,8 Tab,-,Generik,NON KONSINYASI,Aktif
+9,05 Mar 2025 08:00:00,Apotek,L1,Lima 500mg,PB2,Pembelian (Sup A),8 Tab,30 Tab,0 Tab,38 Tab,-,Generik,NON KONSINYASI,Aktif
+10,05 Mar 2025 08:05:00,Apotek,L1,Lima 500mg,PB3,Pembelian (Sup B),38 Tab,10 Tab,0 Tab,48 Tab,-,Generik,NON KONSINYASI,Aktif
+11,05 Mar 2025 10:00:00,Apotek,L1,Lima 500mg,PJ4,Penjualan,48 Tab,0 Tab,10 Tab,38 Tab,-,Generik,NON KONSINYASI,Aktif
+12,07 Mar 2025 09:00:00,Apotek,L1,Lima 500mg,PB2,Pembelian (Unknown Supplier),38 Tab,0 Tab,30 Tab,8 Tab,-,Generik,NON KONSINYASI,Aktif
+13,08 Mar 2025 10:00:00,Apotek,L1,Lima 500mg,PJ5,Penjualan,8 Tab,0 Tab,8 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+14,09 Mar 2025 08:00:00,Apotek,L2,Lido 10mg,PB5,Pembelian (Sup C),0 Tab,5 Tab,0 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+15,09 Mar 2025 10:00:00,Apotek,L2,Lido 10mg,PJ6,Penjualan,5 Tab,0 Tab,1 Tab,4 Tab,-,Generik,NON KONSINYASI,Aktif
+16,10 Mar 2025 08:00:00,Apotek,L1,Lima 500mg,PB4,Pembelian (Sup D),0 Tab,20 Tab,0 Tab,20 Tab,-,Generik,NON KONSINYASI,Aktif

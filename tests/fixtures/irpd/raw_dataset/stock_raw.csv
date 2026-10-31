@@ -1,0 +1,9 @@
+RowNumber,DateTime,Warehouse,DrugCode,DrugName,DocumentNumber,TransactionDescription,InitialStock,StockIn,StockOut,RemainingStock,DrugClass,Category,DrugType,Status
+1,01 Jan 2024 20:00:00,Apotek,D1,Amoxicillin 500mg,PB01,Pembelian Dari Antar Mitra Sembada,0 Tab,30 Tab,0 Tab,30 Tab,-,Generik,NON KONSINYASI,Aktif
+2,01 Jan 2024 20:01:00,Apotek,D1,Amoxicillin 500mg,MT01,Mutasi ke Gudang Obat 1,30 Tab,0 Tab,10 Tab,20 Tab,-,Generik,NON KONSINYASI,Aktif
+3,01 Jan 2024 20:01:00,Gudang Obat 1,D1,Amoxicillin 500mg,MT01,Mutasi dari Apotek,0 Tab,10 Tab,0 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+4,02 Jan 2024 08:00:00,Apotek,D1,Amoxicillin 500mg,PJ01,Penjualan dengan No Faktur PJ01,20 Tab,0 Tab,10 Tab,10 Tab,-,Generik,NON KONSINYASI,Aktif
+5,02 Jan 2024 08:05:00,Apotek,D2,Flazen 50,PJ02,Penjualan dengan No Faktur PJ02,10 Tab,0 Tab,10 Tab,0 Tab,-,Patent,NON KONSINYASI,Aktif
+6,03 Jan 2024 09:00:00,Apotek,D1,Amoxicillin 500mg,PJ03,Penjualan dengan No Faktur PJ03,10 Tab,0 Tab,5 Tab,5 Tab,-,Generik,NON KONSINYASI,Aktif
+7,04 Jan 2024 10:00:00,Apotek,D1,Amoxicillin 500mg,PJ04,Penjualan dengan No Faktur PJ04,5 Tab,0 Tab,5 Tab,0 Tab,-,Generik,NON KONSINYASI,Aktif
+8,05 Jan 2024 11:00:00,Apotek,D2,Flazen 50,SO01,Stokopname,0 Tab,2 Tab,0 Tab,2 Tab,-,Patent,NON KONSINYASI,Aktif

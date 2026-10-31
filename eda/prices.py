@@ -58,9 +58,7 @@ con.sql(f"""
     FROM read_csv_auto('{SALES}')
 """)
 
-# ---------------------------------------------------------------------------
 section("1. PRICE HISTORY (per DrugCode + Unit)")
-# ---------------------------------------------------------------------------
 
 # Units are a trap: the same drug sells as Tab and Strip (or Pcs and Box) at
 # the same time, at ~10x different prices. Keying on DrugCode alone would
@@ -328,9 +326,7 @@ show("Year-average price index by category (quantity-weighted list price, "
     ON Year USING any_value(idx) ORDER BY Category
 """))
 
-# ---------------------------------------------------------------------------
 section("2. PRICE RESPONSE (first look)")
-# ---------------------------------------------------------------------------
 # For each real change on a drug+unit with 2+ real changes: compare weekly
 # units in the 8 weeks before vs the 8 weeks after (change week dropped).
 # Demand is measured as the drug's share of all store units that week, which
@@ -486,9 +482,7 @@ bins = pd.cut(np.expm1(ups.dlog_p) * 100, [0, 5, 10, 20, 100])
 print(ups.groupby(bins, observed=True).dlog_q
       .agg(events="size", median_dlog_q="median", mean_dlog_q="mean").to_string())
 
-# ---------------------------------------------------------------------------
 section("3. REVENUE")
-# ---------------------------------------------------------------------------
 
 show("By year", q("""
     SELECT Year, round(sum(Subtotal) / 1e9, 3) AS revenue_bn,
@@ -587,7 +581,8 @@ show("Line discounts by month (lines discounted)", q("""
     ON Year USING any_value(n) ORDER BY m
 """))
 show("Invoice-level discounts and fees", q("""
-    SELECT count(DISTINCT InvoiceNumber) FILTER (WHERE InvoiceDiscountPct > 0) AS invoices_with_inv_discount,
+    SELECT count(DISTINCT InvoiceNumber) FILTER (WHERE InvoiceDiscountPct > 0)
+               AS invoices_with_inv_discount,
            round(sum(Subtotal - TotalPrice)) AS inv_discount_idr,
            count(*) FILTER (WHERE ServiceFee > 0) AS lines_service_fee,
            round(sum(ServiceFee)) AS service_fee_idr,
@@ -596,9 +591,7 @@ show("Invoice-level discounts and fees", q("""
     FROM sales
 """))
 
-# ---------------------------------------------------------------------------
 section("4. WHY REVENUE DIPPED IN 2024 AND RECOVERED IN 2025")
-# ---------------------------------------------------------------------------
 
 # (a) Traffic vs basket: revenue = invoices x lines/invoice x revenue/line.
 # Log shares add up to the total log change.
@@ -651,8 +644,10 @@ for a, b in ((2023, 2024), (2024, 2025)):
 show("(b) Revenue change: price, volume, new and dropped items (m IDR)", pd.DataFrame(rows))
 
 show("(c) Contribution to the change by category (m IDR)", q("""
-    WITH c AS (SELECT Category, Year, sum(Subtotal) / 1e6 AS r FROM sales GROUP BY ALL),
-    p AS (PIVOT c ON Year USING any_value(r))
+    WITH p AS (
+        PIVOT (SELECT Category, Year, sum(Subtotal) / 1e6 AS r FROM sales GROUP BY ALL)
+        ON Year USING any_value(r)
+    )
     SELECT Category, round(coalesce("2024", 0) - coalesce("2023", 0)) AS d_2023_24,
            round(coalesce("2025", 0) - coalesce("2024", 0)) AS d_2024_25
     FROM p ORDER BY d_2023_24

@@ -30,7 +30,7 @@ pd.set_option("display.max_columns", 40)
 pd.set_option("display.max_colwidth", 70)
 pd.set_option("display.max_rows", 120)
 
-con = duckdb.connect()  # in-memory
+con = duckdb.connect()
 
 
 def q(sql):
@@ -54,10 +54,8 @@ def pct(a, b):
     return f"{100 * a / b:.2f}%" if b else "n/a"
 
 
-# ---------------------------------------------------------------------------
-# Load. Each file twice: as plain text (to see values exactly as written)
+# Load each file twice: as plain text (to see values exactly as written)
 # and with DuckDB's type detection (to see what a naive load would give).
-# ---------------------------------------------------------------------------
 t0 = time.time()
 for name, path in FILES.items():
     if not path.exists():
@@ -93,9 +91,7 @@ SELECT *, strptime(DateTime, '%d %b %Y %H:%M:%S') AS ts FROM sales_raw
 """)
 print(f"Loaded 4 files from {DATA} in {time.time() - t0:.1f}s")
 
-# ---------------------------------------------------------------------------
 header("1. Column profiles")
-# ---------------------------------------------------------------------------
 # fill = not null, not empty. '-' is the POS placeholder for "none", so it is
 # counted separately: a column can be 100% filled and still mostly '-'.
 for name in FILES:
@@ -143,9 +139,7 @@ SELECT split_part(Shift, '-', 2) AS shift_label, count(*) n,
 FROM sales_raw_p GROUP BY 1 ORDER BY n DESC
 """)
 
-# ---------------------------------------------------------------------------
 header("2. What processing changed")
-# ---------------------------------------------------------------------------
 for kind in ("sales", "stock"):
     raw, proc = f"{kind}_raw", f"{kind}_proc"
     rc = set(q(f"DESCRIBE {raw}").column_name)
@@ -193,7 +187,8 @@ FROM sales_raw_p r JOIN sales_proc p USING (RowNumber)
 # A line can draw from several batches: "B1 (ED : d1), B2 (ED : d2)".
 # Processed keeps only the first batch and its expiry.
 show("sales: batch field holding more than one batch (processed keeps the first)", """
-SELECT count(*) FILTER (WHERE len(regexp_extract_all(BatchAndExpiryDate, '\\(ED')) > 1) multi_batch_lines,
+SELECT count(*) FILTER (WHERE len(regexp_extract_all(BatchAndExpiryDate, '\\(ED')) > 1)
+         multi_batch_lines,
        count(*) FILTER (WHERE BatchAndExpiryDate IS NULL) no_batch_field,
        count(*) FILTER (WHERE trim(BatchAndExpiryDate) LIKE 'SW (ED%') placeholder_batch_SW,
        count(*) FILTER (WHERE trim(BatchAndExpiryDate) LIKE 'SW (ED%'
@@ -223,16 +218,16 @@ FROM stock_raw r JOIN stock_proc p USING (RowNumber)
 GROUP BY 1 ORDER BY n DESC
 """)
 print("\n-- stock: distinct purchase suppliers:",
-      one("SELECT count(DISTINCT TransactionType) FROM stock_proc WHERE TransactionType LIKE 'Pembelian%'"))
+      one("SELECT count(DISTINCT TransactionType) FROM stock_proc "
+          "WHERE TransactionType LIKE 'Pembelian%'"))
 
-# ---------------------------------------------------------------------------
 header("3. Keys and joins")
-# ---------------------------------------------------------------------------
 show("Sales InvoiceNumber: format and grain", """
 SELECT count(*) lines, count(DISTINCT InvoiceNumber) invoices,
        count(*) FILTER (WHERE NOT regexp_full_match(InvoiceNumber, 'PJ[0-9]{10}')) odd_format_PJM,
        count(*) FILTER (WHERE regexp_full_match(InvoiceNumber, 'PJ[0-9]{10}')
-                          AND substr(InvoiceNumber, 3, 6) <> strftime(ts, '%y%m%d')) date_not_in_number,
+                          AND substr(InvoiceNumber, 3, 6) <> strftime(ts, '%y%m%d'))
+         date_not_in_number,
        (SELECT count(*) FROM (SELECT InvoiceNumber FROM sales_raw_p GROUP BY 1
           HAVING count(DISTINCT ts) > 1)) invoices_with_2plus_timestamps,
        (SELECT count(*) FROM (SELECT InvoiceNumber FROM sales_raw_p GROUP BY 1
@@ -260,7 +255,8 @@ FROM stock_raw_p GROUP BY 1 ORDER BY n DESC
 """)
 show("Stock DocumentNumber prefix by processed TransactionType (top 12)", """
 SELECT regexp_extract(r.DocumentNumber, '^[A-Za-z]*', 0) prefix,
-       CASE WHEN p.TransactionType LIKE 'Pembelian%' THEN 'Pembelian' ELSE p.TransactionType END ttype,
+       CASE WHEN p.TransactionType LIKE 'Pembelian%' THEN 'Pembelian'
+            ELSE p.TransactionType END ttype,
        count(*) n
 FROM stock_raw r LEFT JOIN stock_proc p USING (RowNumber)
 GROUP BY 1, 2 ORDER BY n DESC LIMIT 12
@@ -281,7 +277,8 @@ FROM stock_raw_p WHERE kind = 'sale' GROUP BY 1, 2
 """)
 con.execute("""
 CREATE TABLE r_lines AS
-SELECT DocumentNumber inv, DrugCode, sum(in_q) qty FROM stock_raw_p WHERE kind = 'return' GROUP BY 1, 2
+SELECT DocumentNumber inv, DrugCode, sum(in_q) qty
+FROM stock_raw_p WHERE kind = 'return' GROUP BY 1, 2
 """)
 show("Sales lines vs stock sale rows on (InvoiceNumber = DocumentNumber, DrugCode), raw", """
 SELECT count(*) FILTER (WHERE s.inv IS NOT NULL AND k.inv IS NOT NULL) AS n_matched,
@@ -318,7 +315,8 @@ WITH m AS (SELECT DrugCode, s.unit su, k.unit ku, k.qty / s.qty f
            WHERE s.unit <> k.unit AND s.n_units = 1 AND x.inv IS NULL)
 SELECT count(DISTINCT DrugCode) codes, count(DISTINCT (DrugCode, su)) code_unit_pairs,
        count(*) lines,
-       (SELECT count(*) FROM (SELECT DrugCode, su FROM m GROUP BY 1, 2 HAVING count(DISTINCT f) > 1))
+       (SELECT count(*) FROM (SELECT DrugCode, su FROM m GROUP BY 1, 2
+                              HAVING count(DISTINCT f) > 1))
          pairs_with_varying_factor
 FROM m
 """)
@@ -331,7 +329,8 @@ show("Units: sales Quantity total vs ledger sale StockOut total", """
 SELECT (SELECT sum(Quantity) FROM sales_raw) sales_qty_raw,
        (SELECT sum(out_q) FROM stock_raw_p WHERE kind = 'sale') ledger_sale_out_raw,
        (SELECT sum(Quantity) FROM sales_proc) sales_qty_proc,
-       (SELECT sum(StockOut) FROM stock_proc WHERE TransactionType = 'Penjualan') ledger_sale_out_proc
+       (SELECT sum(StockOut) FROM stock_proc WHERE TransactionType = 'Penjualan')
+         ledger_sale_out_proc
 """)
 
 show("DrugCode coverage across files", """
@@ -369,7 +368,8 @@ con.execute("""
 CREATE TABLE s_mode AS SELECT DrugCode, mode(DrugName) AS nm, mode(Unit) unit, mode(Category) cat,
     mode(DrugClass) cls FROM sales_raw GROUP BY 1""")
 con.execute("""
-CREATE TABLE k_mode AS SELECT DrugCode, mode(DrugName) AS nm, mode(unit_init) unit, mode(Category) cat,
+CREATE TABLE k_mode AS SELECT DrugCode, mode(DrugName) AS nm, mode(unit_init) unit,
+    mode(Category) cat,
     mode(DrugClass) cls FROM stock_raw_p GROUP BY 1""")
 show("Sales vs stock: most common attribute per shared DrugCode disagrees", """
 SELECT count(*) shared_codes,
@@ -388,17 +388,17 @@ SELECT DrugName, count(DISTINCT DrugCode) codes, string_agg(DISTINCT DrugCode, '
 FROM sales_raw GROUP BY 1 HAVING codes > 1
 """)
 show("Drug names of 3 characters or fewer (unusable for ingredient mapping)", """
-SELECT DrugCode, DrugName, Category, mode(Unit) unit, count(*) lines, sum(Quantity) units, sum(Subtotal) revenue
+SELECT DrugCode, DrugName, Category, mode(Unit) unit, count(*) lines, sum(Quantity) units,
+       sum(Subtotal) revenue
 FROM sales_raw WHERE length(DrugName) <= 3 GROUP BY ALL ORDER BY lines DESC
 """)
 
-# ---------------------------------------------------------------------------
 header("4. Anomalies")
-# ---------------------------------------------------------------------------
 for name, excl in [("sales_raw", "RowNumber"), ("stock_raw", "RowNumber")]:
     cols = [c for c in q(f"DESCRIBE {name}").column_name if c != excl]
     collist = ", ".join(f'"{c}"' for c in cols)
-    dup = one(f"SELECT coalesce(sum(k - 1), 0) FROM (SELECT count(*) k FROM {name} GROUP BY {collist})")
+    dup = one(f"SELECT coalesce(sum(k - 1), 0) "
+              f"FROM (SELECT count(*) k FROM {name} GROUP BY {collist})")
     print(f"\n-- {name}: rows identical to another row on every column but RowNumber: {dup:,}")
 show("Sales: the same drug + batch scanned twice on one invoice (looser duplicate)", """
 SELECT count(*) AS n_groups, sum(k) AS rows_in_groups FROM (
@@ -414,7 +414,8 @@ SELECT count(*) FILTER (WHERE Quantity <= 0)                    qty_le_0,
        count(*) FILTER (WHERE UnitPrice < 100 AND UnitPrice > 0) price_under_100,
        max(UnitPrice)                                           price_max,
        count(*) FILTER (WHERE Subtotal <= 0)                    subtotal_le_0,
-       count(*) FILTER (WHERE Subtotal <> Quantity * UnitPrice - DiscountAmount + ServiceFee + PackagingFee) subtotal_formula_off,
+       count(*) FILTER (WHERE Subtotal <> Quantity * UnitPrice - DiscountAmount
+                                + ServiceFee + PackagingFee) subtotal_formula_off,
        count(*) FILTER (WHERE DiscountAmount > 0)               has_discount,
        count(*) FILTER (WHERE ServiceFee > 0 OR PackagingFee > 0) has_fee
 FROM sales_raw
@@ -422,7 +423,8 @@ FROM sales_raw
 show("Sales: TotalPrice = Subtotal less the invoice-level discount, per line", """
 SELECT count(*) FILTER (WHERE TotalPrice = Subtotal) total_eq_subtotal,
        count(*) FILTER (WHERE TotalPrice <> Subtotal) total_ne_subtotal,
-       count(*) FILTER (WHERE TotalPrice <> Subtotal AND InvoiceDiscountPct = '0%') ne_without_invoice_discount,
+       count(*) FILTER (WHERE TotalPrice <> Subtotal AND InvoiceDiscountPct = '0%')
+         ne_without_invoice_discount,
        sum(Subtotal) - sum(TotalPrice) rupiah_gap
 FROM sales_raw
 """)
@@ -434,7 +436,8 @@ show("Sales: UnitPrice spread max/min > 10, per code vs per (code, unit)", """
 SELECT (SELECT count(*) FROM (SELECT DrugCode FROM sales_raw GROUP BY 1
           HAVING max(UnitPrice) > 10 * min(UnitPrice))) codes,
        (SELECT count(*) FROM (SELECT DrugCode FROM sales_raw GROUP BY 1
-          HAVING max(UnitPrice) > 10 * min(UnitPrice) AND count(DISTINCT Unit) > 1)) codes_sold_in_2plus_units,
+          HAVING max(UnitPrice) > 10 * min(UnitPrice) AND count(DISTINCT Unit) > 1))
+         codes_sold_in_2plus_units,
        (SELECT count(*) FROM (SELECT DrugCode, Unit FROM sales_raw GROUP BY 1, 2
           HAVING max(UnitPrice) > 10 * min(UnitPrice))) code_unit_pairs
 """)
@@ -444,7 +447,8 @@ SELECT min(ts) first_ts, max(ts) last_ts,
        min(hour(ts)) min_hour, max(hour(ts)) max_hour,
        count(*) FILTER (WHERE hour(ts) < 7 OR hour(ts) >= 22) outside_7_22,
        count(*) FILTER (WHERE p.ExpiryDate < p.Date) sold_after_expiry,
-       count(*) FILTER (WHERE p.ExpiryDate < p.Date AND p.BatchNumber <> 'SW') after_expiry_real_batch,
+       count(*) FILTER (WHERE p.ExpiryDate < p.Date AND p.BatchNumber <> 'SW')
+         after_expiry_real_batch,
        count(*) FILTER (WHERE p.ExpiryDate IS NULL) no_expiry,
        count(*) FILTER (WHERE year(p.ExpiryDate) > 2040) expiry_after_2040
 FROM sales_raw_p r LEFT JOIN sales_proc p USING (RowNumber)
@@ -485,7 +489,8 @@ SELECT DrugCode, DrugName, unit_init unit, in_q, out_q, left(TransactionDescript
 FROM stock_raw_p ORDER BY greatest(in_q, out_q) DESC LIMIT 8
 """)
 show("Stock: running balance across rows, per (DrugCode, Warehouse) and per DrugCode only", """
-WITH w AS (SELECT init_q, lag(rem_q) OVER (PARTITION BY DrugCode, Warehouse ORDER BY RowNumber) prev_wh,
+WITH w AS (SELECT init_q,
+                  lag(rem_q) OVER (PARTITION BY DrugCode, Warehouse ORDER BY RowNumber) prev_wh,
                   lag(rem_q) OVER (PARTITION BY DrugCode ORDER BY RowNumber) prev_code
            FROM stock_raw_p)
 SELECT count(*) FILTER (WHERE prev_wh IS NOT NULL AND init_q <> prev_wh) breaks_per_location,
@@ -503,12 +508,15 @@ FROM w WHERE prev IS NOT NULL AND init_q <> prev GROUP BY 1 ORDER BY breaks DESC
 """)
 show("Stock: processed file balance chain (locations merged)", """
 SELECT count(*) FILTER (WHERE prev IS NOT NULL AND InitialStock <> prev) breaks,
-       count(*) FILTER (WHERE prev IS NOT NULL AND InitialStock <> prev AND TransactionType = 'Mutasi') breaks_on_mutasi
+       count(*) FILTER (WHERE prev IS NOT NULL AND InitialStock <> prev
+                          AND TransactionType = 'Mutasi') breaks_on_mutasi
 FROM (SELECT InitialStock, TransactionType,
-             lag(RemainingStock) OVER (PARTITION BY DrugCode ORDER BY RowNumber) prev FROM stock_proc)
+             lag(RemainingStock) OVER (PARTITION BY DrugCode ORDER BY RowNumber) prev
+      FROM stock_proc)
 """)
 show("Stock: 'Test Entry' rows", """
-SELECT count(*) n, count(DISTINCT p.DrugCode) codes, min(p.Date) AS first_date, max(p.Date) AS last_date,
+SELECT count(*) n, count(DISTINCT p.DrugCode) codes,
+       min(p.Date) AS first_date, max(p.Date) AS last_date,
        sum(r.in_q) units_in, sum(r.out_q) units_out,
        mode(left(r.DocumentNumber, 2)) doc_prefix, mode(r.TransactionDescription) typical_descr
 FROM stock_proc p JOIN stock_raw_p r USING (RowNumber) WHERE p.TransactionType = 'Test Entry'
@@ -516,13 +524,16 @@ FROM stock_proc p JOIN stock_raw_p r USING (RowNumber) WHERE p.TransactionType =
 show("Stock: system/setup rows (bulk imports; mostly no movement)", """
 SELECT TransactionType, count(*) n, min(Date) AS first_date, max(Date) AS last_date,
        sum(StockIn) units_in, sum(StockOut) units_out
-FROM stock_proc WHERE TransactionType IN ('Import Data Obat', 'Tambah Master Obat', 'Import Stokopname')
+FROM stock_proc
+WHERE TransactionType IN ('Import Data Obat', 'Tambah Master Obat', 'Import Stokopname')
 GROUP BY 1
 """)
 show("Odd units: units used by fewer than 1,000 rows (raw)", """
-SELECT 'sales' f, Unit, count(*) n, count(DISTINCT DrugCode) codes FROM sales_raw GROUP BY 2 HAVING n < 1000
+SELECT 'sales' f, Unit, count(*) n, count(DISTINCT DrugCode) codes
+FROM sales_raw GROUP BY 2 HAVING n < 1000
 UNION ALL
-SELECT 'stock', unit_init, count(*), count(DISTINCT DrugCode) FROM stock_raw_p GROUP BY 2 HAVING count(*) < 1000
+SELECT 'stock', unit_init, count(*), count(DISTINCT DrugCode)
+FROM stock_raw_p GROUP BY 2 HAVING count(*) < 1000
 ORDER BY f, n
 """)
 

@@ -21,7 +21,7 @@ SALES = DATA / "processed_dataset" / "sales_processed.csv"
 STOCK = DATA / "processed_dataset" / "stock_processed.csv"
 STOCK_RAW = DATA / "raw_dataset" / "stock_raw.csv"
 
-CUTOFF = "2025-06-30"  # provisional replay cutoff from PLAN.md
+CUTOFF = "2025-06-30"  # the replay cutoff
 
 # Ramadan and Eid al-Fitr dates as set by Indonesia's Ministry of Religious
 # Affairs (Kemenag). Eid day itself is one of the shop's closed days.
@@ -40,7 +40,10 @@ pd.set_option("display.max_columns", 30)
 pd.set_option("display.float_format", lambda x: f"{x:,.2f}")
 
 con = duckdb.connect()
-q = lambda sql: con.sql(sql).df()  # noqa: E731
+
+
+def q(sql):
+    return con.sql(sql).df()
 
 
 def section(title):
@@ -51,9 +54,6 @@ def show(df, index=False):
     print(df.to_string(index=index))
 
 
-# --------------------------------------------------------------------------
-# Load
-# --------------------------------------------------------------------------
 con.sql(f"""
     CREATE TABLE sales AS
     SELECT Date AS d, Year AS yr, Month AS mo, DayOfWeek AS dow, Hour AS hr,
@@ -115,9 +115,6 @@ con.sql("""
 """)
 print(f"Loaded in {time.time() - T0:.0f}s")
 
-# --------------------------------------------------------------------------
-# 1. Trend
-# --------------------------------------------------------------------------
 section("1. Trend 2023-2025")
 yearly = q("""
     SELECT yr, count(DISTINCT d) AS trading_days, count(DISTINCT inv) AS invoices,
@@ -143,9 +140,6 @@ show(monthly.pivot(index="mo", columns="yr", values="rev_m"), index=True)
 print("\nUnits per month:")
 show(monthly.pivot(index="mo", columns="yr", values="units"), index=True)
 
-# --------------------------------------------------------------------------
-# 2. Weekday, hour, shift
-# --------------------------------------------------------------------------
 section("2. Weekday, hour, shift")
 wd = q("""
     WITH daily AS (
@@ -177,9 +171,6 @@ print("\nBy shift (PAGI = morning, SORE = afternoon/evening):")
 show(shifts)
 print("Shift is the cashier's shift label, so its hours overlap; use Hour for time of day.")
 
-# --------------------------------------------------------------------------
-# 3. Ramadan and Eid
-# --------------------------------------------------------------------------
 section("3. Ramadan and Eid al-Fitr")
 # Each day's invoices divided by the mean for the same weekday in the same
 # year, so weekday mix doesn't bias the windows.
@@ -223,12 +214,9 @@ for yr, (_, eid) in RAMADAN.items():
                        "idx": hit.inv_idx.iloc[0] if len(hit) else float("nan")})
 show(pd.DataFrame(around).pivot(index="year", columns="day", values="idx"), index=True)
 
-# --------------------------------------------------------------------------
-# 4. Illness seasons
-# --------------------------------------------------------------------------
 section("4. Illness seasons (name-based drug groups)")
 # Rough groups from drug names (brands common in Indonesia). Good enough to
-# see a seasonal shape; the ingredient mapping in pillar 3 will replace this.
+# see a seasonal shape; the LLM ingredient mapping is the proper version.
 GROUPS = {
     "cough_cold_flu": r"flu|grip|batuk|obh|paratusin|neozep|decolgen|procold|inza|"
                       r"woods|siladex|vicks|bisolvon|ambroxol|anacetin|alpara|lapisiv|"
@@ -271,9 +259,6 @@ print("Relative to all drugs (group index / ALL index, mean of years):")
 rel = avg_idx.drop(columns="ALL").div(avg_idx["ALL"], axis=0)
 show(rel, index=True)
 
-# --------------------------------------------------------------------------
-# 5. Concentration
-# --------------------------------------------------------------------------
 section("5. Concentration (Pareto)")
 per_drug = q("""
     SELECT drug, any_value(name) AS name, sum(qty) AS units, sum(rev) AS rev,
@@ -297,16 +282,13 @@ top_u = set(per_drug.nlargest(int(n * 0.1), "units").drug)
 top_r = set(per_drug.nlargest(int(n * 0.1), "rev").drug)
 print(f"Overlap of top-10% by units and top-10% by revenue: "
       f"{len(top_u & top_r)} of {len(top_u)} drugs")
-print(f"Drugs with a single sale line in 3 years: "
+print(f"Drugs sold on a single day in 3 years: "
       f"{(per_drug.sale_days == 1).sum()} ({100 * (per_drug.sale_days == 1).mean():.1f}%)")
 print("Note: units mix tablets, bottles, tubes etc., so revenue is the fairer weight.")
 print("\nTop 15 by revenue:")
 show(per_drug.nlargest(15, "rev")[["name", "units", "rev", "sale_days"]]
      .assign(rev=lambda x: x.rev / 1e6).rename(columns={"rev": "rev_m"}))
 
-# --------------------------------------------------------------------------
-# 6. Demand classes (Syntetos-Boylan)
-# --------------------------------------------------------------------------
 section("6. Demand classes: ADI and CV² (Syntetos-Boylan)")
 print(f"""ADI = periods in the drug's active window / periods with a sale.
 Active window = first to last sale. Periods are trading days (closed days
@@ -371,9 +353,11 @@ def sb_classes(grain):
     stats["adi_all"] = stats.periods / stats.nz
     stats["adi_instock"] = stats.in_stock_periods / stats.nz
     stats["class_all"] = [classify(a, c, z) for a, c, z in
-                          zip(stats.adi_all, stats.cv2.fillna(0), stats.nz)]
-    stats["class_instock"] = [classify(a, c, z) if pd.notna(a) else "no ledger"
-                              for a, c, z in zip(stats.adi_instock, stats.cv2.fillna(0), stats.nz)]
+                          zip(stats.adi_all, stats.cv2.fillna(0), stats.nz, strict=True)]
+    stats["class_instock"] = [
+        classify(a, c, z) if pd.notna(a) else "no ledger"
+        for a, c, z in zip(stats.adi_instock, stats.cv2.fillna(0), stats.nz, strict=True)
+    ]
     return stats
 
 
@@ -404,9 +388,6 @@ for grain in ["day", "week"]:
     print("Top 300 drugs by revenue, class (in-stock):",
           top.class_instock.value_counts().to_dict())
 
-# --------------------------------------------------------------------------
-# 7. Baskets
-# --------------------------------------------------------------------------
 section("7. Baskets")
 bask = q("""
     SELECT CASE WHEN lines >= 6 THEN '6+' ELSE lines::VARCHAR END AS lines,
@@ -443,15 +424,12 @@ pairs = q("""
 print("\nMost common drug pairs:")
 show(pairs)
 
-# --------------------------------------------------------------------------
-# 8. Life cycle and forecastable history
-# --------------------------------------------------------------------------
 section("8. Drug life cycle")
-life = q("""
+life = q(f"""
     SELECT drug, min(d) AS first, max(d) AS last, count(*) AS sale_days,
            sum(rev) AS rev,
-           count(*) FILTER (WHERE d <= DATE '2025-06-30') AS sale_days_pre,
-           sum(rev) FILTER (WHERE d > DATE '2025-06-30') AS rev_post
+           count(*) FILTER (WHERE d <= DATE '{CUTOFF}') AS sale_days_pre,
+           sum(rev) FILTER (WHERE d > DATE '{CUTOFF}') AS rev_post
     FROM drug_day GROUP BY drug
 """)
 life["first"] = pd.to_datetime(life["first"])

@@ -1,0 +1,2 @@
+RowNumber,Date,Time,InvoiceNumber,CashierID,DrugCode,DrugName,Category,Quantity,Unit,UnitPrice,DiscountAmount,Subtotal,PaymentType
+1,2025-05-02,09:00:00,PJ1,Cashier_001,A1,Amoxicillin 500mg,Generik,28,Tab,700,0,19600,TUNAI

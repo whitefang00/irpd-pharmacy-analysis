@@ -1,0 +1,255 @@
+{
+  "question": "Paracetamol 500mg Nova is out. What should customers get instead, and how much Nova should I reorder?",
+  "as_of": "2025-06-30",
+  "model": "gpt-6-luna",
+  "steps": [
+    {
+      "type": "tool_call",
+      "id": "call_1",
+      "name": "find_drug",
+      "args": {
+        "name": "Paracetamol 500mg Nova"
+      },
+      "output": {
+        "match": "SW2106002022",
+        "candidates": [
+          {
+            "drug_code": "SW2106002022",
+            "drug_name": "Paracetamol 500mg Nova",
+            "unit": "Tab",
+            "last_seen": "2025-06-03",
+            "match_score": 1
+          },
+          {
+            "drug_code": "SW2106002012",
+            "drug_name": "Paracetamol 500mg",
+            "unit": "Tab",
+            "last_seen": "2023-07-12",
+            "match_score": 0.87
+          },
+          {
+            "drug_code": "OBT2111020001",
+            "drug_name": "Paracetamol 500mg Bernof",
+            "unit": "Tab",
+            "last_seen": "2023-08-07",
+            "match_score": 0.87
+          }
+        ],
+        "by_ingredient": {
+          "ingredients_matched": [
+            "paracetamol"
+          ],
+          "form_family": null,
+          "products": [
+            {
+              "drug_code": "OBT2208110007",
+              "drug_name": "Progesic kaplet",
+              "unit": "Tab",
+              "last_sale": "2025-06-30",
+              "revenue_28d_rp": 1472000,
+              "ingredients": "paracetamol",
+              "form": "tablet",
+              "stock_total": 2760,
+              "units_sold_28d": 920
+            },
+            {
+              "drug_code": "OBT2202230011",
+              "drug_name": "Zetamol tb 500mg",
+              "unit": "Tab",
+              "last_sale": "2025-06-30",
+              "revenue_28d_rp": 864000,
+              "ingredients": "paracetamol",
+              "form": "tablet",
+              "stock_total": 870,
+              "units_sold_28d": 1440
+            },
+            {
+              "drug_code": "SW2106001593",
+              "drug_name": "Tempra Syr 60ml",
+              "unit": "Fls",
+              "last_sale": "2025-06-30",
+              "revenue_28d_rp": 707000,
+              "ingredients": "paracetamol",
+              "form": "syrup",
+              "stock_total": 4,
+              "units_sold_28d": 14
+            }
+          ],
+          "products_left_out": 152,
+          "note": "Single-ingredient products first. For the full list, use run_sql on ingredient_map: ingredients is the sorted set joined by ' + ' (so 'paracetamol' alone means a single-ingredient product); form is e.g. syrup, suspension, liquid, drops, tablet."
+        }
+      }
+    },
+    {
+      "type": "tool_call",
+      "id": "call_2",
+      "name": "stock_position",
+      "args": {
+        "drug": "SW2106002022"
+      },
+      "output": {
+        "drug_code": "SW2106002022",
+        "drug_name": "Paracetamol 500mg Nova",
+        "as_of": "2025-06-30",
+        "unit": "Tab",
+        "stock_floor": 0,
+        "stock_store": 0,
+        "stock_total": 0,
+        "out_of_stock": true,
+        "out_of_stock_since": "2025-06-03",
+        "shelf_out": false,
+        "shelf_out_since": null,
+        "units_sold_last_28d": 50,
+        "avg_daily_units_last_28d": 1.79,
+        "cover_days": 0,
+        "in_stock_days_last_28d": 1,
+        "cover_days_at_in_stock_rate": 0,
+        "forecast_avg_daily_units_next_4w": 15.11,
+        "cover_days_at_forecast": 0,
+        "forecast_method": "ses+eid",
+        "last_delivery": "2025-05-23",
+        "last_delivery_units": 300,
+        "last_delivery_suppliers": "Balutan Mandiri Pharmindo.PT",
+        "days_since_last_delivery": 38,
+        "main_supplier": "Balutan Mandiri Pharmindo.PT",
+        "main_supplier_cadence_days": 17
+      }
+    },
+    {
+      "type": "tool_call",
+      "id": "call_3",
+      "name": "alternatives",
+      "args": {
+        "drug": "SW2106002022"
+      },
+      "output": {
+        "drug_code": "SW2106002022",
+        "drug_name": "Paracetamol 500mg Nova",
+        "as_of": "2025-06-30",
+        "mapped": true,
+        "ingredients": "paracetamol",
+        "strength": "500mg",
+        "form": "tablet",
+        "form_family": "oral solid",
+        "units": "stock and units sold are in each drug's own base unit; revenue in rupiah",
+        "alternatives": [
+          {
+            "drug_code": "OBT2202230011",
+            "drug_name": "Zetamol tb 500mg",
+            "strength": "500mg",
+            "form": "tablet",
+            "unit": "Tab",
+            "last_sale": "2025-06-30",
+            "revenue_28d_rp": 864000,
+            "stock_floor": 870,
+            "stock_store": 0,
+            "stock_total": 870,
+            "units_sold_28d": 1440,
+            "same_form_family": true
+          },
+          {
+            "drug_code": "SW2106002021",
+            "drug_name": "Paracetamol 500mg Mersi",
+            "strength": "500 mg",
+            "form": "tablet",
+            "unit": "Tab",
+            "last_sale": "2025-06-29",
+            "revenue_28d_rp": 263000,
+            "stock_floor": 360,
+            "stock_store": 200,
+            "stock_total": 560,
+            "units_sold_28d": 880,
+            "same_form_family": true
+          },
+          {
+            "drug_code": "SW2106000111",
+            "drug_name": "Cargesic 500",
+            "strength": "500 mg",
+            "form": "tablet",
+            "unit": "Tab",
+            "last_sale": "2025-06-16",
+            "revenue_28d_rp": 143000,
+            "stock_floor": 490,
+            "stock_store": 99,
+            "stock_total": 589,
+            "units_sold_28d": 210,
+            "same_form_family": true
+          },
+          {
+            "drug_code": "SW2106000555",
+            "drug_name": "Mirasic 500",
+            "strength": "500 mg",
+            "form": "",
+            "unit": "Tab",
+            "last_sale": "2025-06-30",
+            "revenue_28d_rp": 143000,
+            "stock_floor": 479,
+            "stock_store": 400,
+            "stock_total": 879,
+            "units_sold_28d": 290,
+            "same_form_family": true
+          },
+          {
+            "drug_code": "SW2106000800",
+            "drug_name": "Stanza 500mg",
+            "strength": "500 mg",
+            "form": "tablet",
+            "unit": "Tab",
+            "last_sale": "2025-06-27",
+            "revenue_28d_rp": 70000,
+            "stock_floor": 490,
+            "stock_store": 0,
+            "stock_total": 490,
+            "units_sold_28d": 140,
+            "same_form_family": true
+          }
+        ],
+        "alternatives_left_out": 74
+      }
+    },
+    {
+      "type": "tool_call",
+      "id": "call_4",
+      "name": "reorder_plan",
+      "args": {
+        "drugs": [
+          "SW2106002022"
+        ],
+        "tier": null,
+        "service_level": 0.95,
+        "lead_days": null
+      },
+      "output": {
+        "as_of": "2025-06-30",
+        "service_level": 0.95,
+        "drugs_planned": 1,
+        "drugs_to_order_now": 1,
+        "plan": [
+          {
+            "drug_code": "SW2106002022",
+            "drug_name": "Paracetamol 500mg Nova",
+            "tier": "regular",
+            "s": 472,
+            "S": 779,
+            "lead_days": 14,
+            "floor_min": 81,
+            "floor_max": 187,
+            "stock_total": 0,
+            "mean_demand_lead": 211.5,
+            "days_since_last_sale": 27,
+            "order_now": 779,
+            "main_supplier": "Balutan Mandiri Pharmindo.PT"
+          }
+        ],
+        "plan_left_out": 0,
+        "note": "Units are each drug's base unit. Stock on order is unknown, so the current total stock is taken as the stock position. Drugs with no sale in 90+ days order nothing now (likely delisted)."
+      }
+    }
+  ],
+  "answer": "Nova is confirmed out of stock (0 tablets). Offer same-strength 500 mg tablet alternatives, subject to pharmacist confirmation: Paracetamol 500mg Mersi (560 tablets in stock) or Zetamol tb 500mg (870 tablets); Cargesic 500 (589 tablets), Mirasic 500 (879 tablets), and Stanza 500mg (490 tablets) are also listed alternatives. Reorder 779 Nova tablets now; this is the plan at a 95% service level using the default 14-day lead-time setting.",
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cost_usd": 0.0
+  }
+}

@@ -32,7 +32,7 @@ pd.set_option("display.max_columns", 40)
 pd.set_option("display.max_colwidth", 45)
 pd.set_option("display.max_rows", 80)
 
-con = duckdb.connect()  # in-memory
+con = duckdb.connect()
 
 
 def q(sql):
@@ -58,14 +58,11 @@ def pct(a, b):
 
 t0 = time.time()
 
-# ---------------------------------------------------------------------------
-# Load the raw ledger. Quantities are "1.234 Tab" (dot = thousands, no
-# decimals in this file). TransactionDescription is free text; we classify it
-# into movement kinds. Everything that isn't a sale, purchase, return,
-# stock-take or master-data row is an inter-location transfer ("mutasi",
-# "mts", "m", ... and a few "test" entries that also moved stock).
-# ---------------------------------------------------------------------------
-
+# Quantities are "1.234 Tab" (dot = thousands, no decimals in this file).
+# TransactionDescription is free text, classified into movement kinds.
+# Everything that isn't a sale, purchase, return, stock-take or master-data
+# row is an inter-location transfer ("mutasi", "mts", "m", ... and a few
+# "test" entries that also moved stock).
 
 def qty(col):
     return f"replace(split_part({col}, ' ', 1), '.', '')::BIGINT"
@@ -126,9 +123,6 @@ print(f"\ndrugs: {one('SELECT count(*) FROM drugs')}, "
 print(f"test-entry transfers: {one('SELECT count(*) FROM led WHERE test_entry')} rows, "
       f"{one('SELECT sum(qin) FROM led WHERE test_entry')} units moved")
 
-# ---------------------------------------------------------------------------
-# 1. Rebuild end-of-day stock and check it reconciles.
-# ---------------------------------------------------------------------------
 header("1. End-of-day stock: rebuild and reconcile")
 
 n = one("SELECT count(*) FROM led")
@@ -145,7 +139,8 @@ print(f"opening + in - out = closing fails on {bad_row} of {n} rows")
 print(f"opening = previous closing (per drug, location, by RowNumber) fails on {bad_chain} rows")
 print(f"timestamps going backwards within a drug and location: {back_ts}")
 show("Where the chain breaks (row kind, previous row kind, same second as previous?)", """
-SELECT kind, lag_kind, (ts = prev_ts) AS same_second, count(*) AS rows, count(DISTINCT code) AS drugs
+SELECT kind, lag_kind, (ts = prev_ts) AS same_second, count(*) AS rows,
+       count(DISTINCT code) AS drugs
 FROM (SELECT *, lag(kind) OVER (PARTITION BY code, wh ORDER BY rn) AS lag_kind FROM led_seq)
 WHERE k > 1 AND s0 <> prev_s1 GROUP BY ALL ORDER BY rows DESC""")
 
@@ -244,12 +239,10 @@ FROM p JOIN eod e USING (code, d) WHERE code IN (SELECT code FROM st)""")
 print(f"\nrebuilt: {one('SELECT count(*) FROM eod_wh')} drug-location-days, "
       f"{one('SELECT count(*) FROM eod')} drug-days")
 
-# ---------------------------------------------------------------------------
 # Demand tiers. A drug's live window runs from its first to its last sale in
 # the ledger. Tier = sale-days per year inside that window. Stock-out shares
 # below count only days inside the live window, so drugs that were dropped
 # or not yet listed don't count as "out". Scope: the processed categories.
-# ---------------------------------------------------------------------------
 con.execute(f"""
 CREATE TABLE tiers AS
 WITH s AS (SELECT code, min(d) AS first_sale, max(d) AS last_sale,
@@ -277,7 +270,7 @@ SELECT tier, count(*) AS drugs, sum(units) AS units_sold,
        round(median(live_days)) AS median_live_days
 FROM tiers GROUP BY tier ORDER BY tier""")
 
-show("Share of drug-days with end-of-day stock <= 0", f"""
+show("Share of drug-days with end-of-day stock <= 0", """
 SELECT 'all drug-days, all drugs (calendar fill)' AS basis, count(*) AS drug_days,
        round(100.0 * avg((stock <= 0)::INT), 1) AS pct_out FROM eod
 UNION ALL
@@ -382,22 +375,20 @@ WITH x AS (SELECT code, tier, sold,
                   lag(stock) OVER (PARTITION BY code ORDER BY d) AS stock_prev
            FROM live WHERE d >= DATE '2023-07-07' AND tier IN ('1 fast', '2 regular')),
 b AS (SELECT code, avg(sold) FILTER (WHERE floor_prev > 0) AS base FROM x GROUP BY code)
-SELECT CASE WHEN stock_prev <= 0 THEN 'total out' WHEN floor_prev <= 0 THEN 'shelf-out (store stocked)'
+SELECT CASE WHEN stock_prev <= 0 THEN 'total out'
+            WHEN floor_prev <= 0 THEN 'shelf-out (store stocked)'
             ELSE 'floor stocked' END AS state_prev_night,
        count(*) AS drug_days, round(sum(sold) / sum(base), 2) AS sold_vs_drug_normal
 FROM x JOIN b USING (code) WHERE floor_prev IS NOT NULL GROUP BY 1 ORDER BY 1""")
 
 # Rough size of the hidden demand: spell days x the drug's pre-spell rate.
-# Not an estimate yet (pillar 2 does that), just the order of magnitude.
+# Only the order of magnitude; the lost-demand model does it properly.
 show("Rough hidden demand in real spells: days x mean daily sales in the 60 days before", """
 SELECT s.tier, count(*) AS spells, round(sum(s.days * s.sold_60d_before / 60.0)) AS approx_units,
        round(sum(s.days * s.sold_60d_before / 60.0 * p.price) / 1e6) AS approx_rp_million
 FROM spells s LEFT JOIN price p USING (code)
 WHERE s.sold_60d_before > 0 AND s.sells_after GROUP BY 1 ORDER BY 1""")
 
-# ---------------------------------------------------------------------------
-# 3. The pharmacist's behaviour: deliveries, reorder points, order sizes.
-# ---------------------------------------------------------------------------
 header("3. Purchases and the pharmacist's reorder behaviour")
 
 # Running total stock (both locations) after every row, so we know the stock
@@ -486,15 +477,12 @@ SELECT year(d) AS year, round(100.0 * avg((wh = '{STORE}')::INT), 1) AS pct_line
        count(*) AS lines, sum(qin) AS units
 FROM led WHERE kind = 'purchase' AND qin > 0 GROUP BY 1 ORDER BY 1""")
 
-# ---------------------------------------------------------------------------
-# 4. Stock-takes and transfers.
-# ---------------------------------------------------------------------------
 header("4. Stock-takes (shrinkage and gains) and transfers")
 
 # Two mass counts dominate: July-September 2023, when the upstairs store was
 # set up and stock was moved by counting it out of the floor and into the
 # store, and August 2025, a full count of every drug (inside the holdout).
-con.execute(f"""
+con.execute("""
 CREATE TABLE takes AS
 SELECT l.*, coalesce(p.price, 0) AS price,
        CASE WHEN d BETWEEN DATE '2023-07-01' AND DATE '2023-09-30' THEN '2023 Q3 store setup'
@@ -513,7 +501,8 @@ show("Store setup: stock-take moves floor -> store, and the drugs with the bigge
 SELECT code, drug, sum(qout) FILTER (WHERE wh = '{FLOOR}') AS floor_down,
        sum(qin) FILTER (WHERE wh = '{STORE}') AS store_up,
        sum(qin - qout) AS net
-FROM takes WHERE period = '2023 Q3 store setup' GROUP BY ALL ORDER BY floor_down DESC NULLS LAST LIMIT 8""")
+FROM takes WHERE period = '2023 Q3 store setup'
+GROUP BY ALL ORDER BY floor_down DESC NULLS LAST LIMIT 8""")
 
 # Routine counts: real adjustments, per drug and day (several rows in a
 # second are one count entered in steps).
@@ -524,8 +513,10 @@ WITH a AS (SELECT code, d, sum(qin - qout) AS adj, arg_min(s0, rn) AS before,
 SELECT count(*) AS drug_days, sum((adj > 0)::INT) AS gains, sum((adj < 0)::INT) AS losses,
        sum((adj = 0)::INT) AS no_change,
        median(abs(adj)) FILTER (WHERE adj <> 0) AS median_abs_adj,
-       round(median(abs(adj) / nullif(abs(before), 0)) FILTER (WHERE adj <> 0), 2) AS median_rel_adj,
-       sum(adj) FILTER (WHERE adj > 0) AS units_gained, sum(adj) FILTER (WHERE adj < 0) AS units_lost,
+       round(median(abs(adj) / nullif(abs(before), 0)) FILTER (WHERE adj <> 0), 2)
+         AS median_rel_adj,
+       sum(adj) FILTER (WHERE adj > 0) AS units_gained,
+       sum(adj) FILTER (WHERE adj < 0) AS units_lost,
        round(sum(adj * price) FILTER (WHERE adj > 0) / 1e6, 1) AS gained_rp_m,
        round(sum(adj * price) FILTER (WHERE adj < 0) / 1e6, 1) AS lost_rp_m,
        sum((before <= 0 AND adj > 0)::INT) AS gains_from_zero_or_neg
@@ -545,23 +536,22 @@ WITH t AS (SELECT date_trunc('quarter', d) AS q,
                   sum(qin) FILTER (WHERE wh = '{STORE}') AS floor_to_store,
                   count(DISTINCT doc) AS docs, sum(test_entry::INT) AS test_rows
            FROM led WHERE kind = 'transfer' GROUP BY 1),
-s AS (SELECT date_trunc('quarter', d) AS q, sum(greatest(store, 0)) / count(DISTINCT d) AS store_units,
+s AS (SELECT date_trunc('quarter', d) AS q,
+             sum(greatest(store, 0)) / count(DISTINCT d) AS store_units,
              sum(greatest(stock, 0)) / count(DISTINCT d) AS total_units
       FROM eod WHERE code NOT IN (SELECT code FROM drugs WHERE cat IN {OUT_OF_SCOPE}) GROUP BY 1)
 SELECT strftime(s.q, '%Y-Q') || quarter(s.q) AS quarter, t.docs, t.store_to_floor, t.floor_to_store,
        t.test_rows, round(100 * store_units / total_units, 1) AS pct_stock_in_store
 FROM s LEFT JOIN t USING (q) ORDER BY s.q""")
 
-show("Transfer lead: days a fast/regular drug's floor sat empty while the store had stock (spells)", f"""
+show("Transfer lead: days a fast/regular drug's floor sat empty while the store had stock "
+     "(spells)", """
 WITH x AS (SELECT code, d, d - CAST(row_number() OVER (PARTITION BY code ORDER BY d) AS INT) AS grp
            FROM live WHERE floor <= 0 AND store > 0 AND tier IN ('1 fast', '2 regular')),
 sp AS (SELECT code, count(*) AS days FROM x GROUP BY code, grp)
 SELECT count(*) AS spells, median(days) AS median_days, quantile_cont(days, 0.9) AS p90_days,
        sum(days) AS total_days FROM sp""")
 
-# ---------------------------------------------------------------------------
-# 5. Negative stock and huge balances.
-# ---------------------------------------------------------------------------
 header("5. Negative stock and huge balances")
 
 show("Rows that leave a location negative, by kind", """
@@ -585,7 +575,8 @@ FROM n JOIN eod_rows e USING (code, wh, d)""")
 
 con.execute("""
 CREATE TABLE neg AS
-WITH x AS (SELECT code, d, stock, d - CAST(row_number() OVER (PARTITION BY code ORDER BY d) AS INT) AS grp
+WITH x AS (SELECT code, d, stock,
+                  d - CAST(row_number() OVER (PARTITION BY code ORDER BY d) AS INT) AS grp
            FROM eod WHERE stock < 0)
 SELECT code, min(d) AS start, max(d) AS stop, count(*) AS days, min(stock) AS depth
 FROM x GROUP BY code, grp
@@ -595,7 +586,8 @@ WITH e AS (SELECT n.code, n.start, arg_max(l.kind, l.qin) AS cleared_by
            FROM neg n JOIN led l ON l.code = n.code AND l.d = n.stop + 1 AND l.qin > 0
            GROUP BY ALL)
 SELECT coalesce(cleared_by, '(still negative / no inflow)') AS cleared_by, count(*) AS spells,
-       median(days) AS median_days, quantile_cont(days, 0.9) AS p90_days, median(depth) AS median_depth
+       median(days) AS median_days, quantile_cont(days, 0.9) AS p90_days,
+       median(depth) AS median_depth
 FROM neg LEFT JOIN e USING (code, start) GROUP BY 1 ORDER BY 2 DESC""")
 print(f"\nnegative total-stock drug-days: {one('SELECT sum(days) FROM neg')} "
       f"({pct(one('SELECT sum(days) FROM neg'), one('SELECT count(*) FROM eod'))} of all), "
@@ -615,15 +607,13 @@ FROM m JOIN drugs d USING (code) LEFT JOIN tiers t USING (code)
 ORDER BY m.peak DESC LIMIT 10""")
 show("Drugs with > 3 years of sales on hand at some point (>= 500 units)", """
 WITH m AS (SELECT code, max(stock) AS peak,
-                  max(stock) FILTER (WHERE d >= DATE '2023-10-01') AS peak_late FROM eod GROUP BY code)
+                  max(stock) FILTER (WHERE d >= DATE '2023-10-01') AS peak_late
+           FROM eod GROUP BY code)
 SELECT count(*) AS drugs_ever,
        sum((peak_late > 3 * coalesce(t.units, 0) / 3.0)::INT) AS still_after_sep23
 FROM m LEFT JOIN tiers t USING (code)
 WHERE peak >= 500 AND peak > 3 * coalesce(t.units, 0) / 3.0""")
 
-# ---------------------------------------------------------------------------
-# 6. Baseline numbers for the replay: stock held at selling price.
-# ---------------------------------------------------------------------------
 header("6. Stock held at selling price (replay baseline)")
 show("Mean daily stock value, negatives clipped to 0, in scope, by half-year", """
 SELECT year(e.d) || '-H' || (CASE WHEN month(e.d) <= 6 THEN 1 ELSE 2 END) AS half,
@@ -639,7 +629,8 @@ SELECT t.tier, count(DISTINCT e.code) AS drugs,
        round(sum(greatest(e.stock, 0) * p.price) / count(DISTINCT e.d) / 1e6, 1) AS mean_value_rp_m,
        round(sum(e.sold * p.price) / 1e6) AS revenue_rp_m_approx
 FROM eod e JOIN tiers t USING (code) JOIN price p USING (code)
-WHERE e.d >= DATE '2025-07-01' AND t.tier IN ('1 fast', '2 regular') AND t.last_sale >= DATE '2025-07-01'
+WHERE e.d >= DATE '2025-07-01' AND t.tier IN ('1 fast', '2 regular')
+  AND t.last_sale >= DATE '2025-07-01'
 GROUP BY 1 ORDER BY 1""")
 
-print(f"\ndone in {time.time() - t0:.0f}s")
+print(f"\nDone in {time.time() - t0:.0f}s")

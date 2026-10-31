@@ -1,4 +1,4 @@
-"""EDA route 5: switching to an alternative (pillar 3 go/no-go).
+"""EDA route 5: do customers switch to an alternative when a drug is out?
 
 Question: when a drug is out of stock, do customers buy another drug with the
 same active ingredient and strength instead?
@@ -51,10 +51,6 @@ con = duckdb.connect()
 def section(title):
     print(f"\n{'=' * 78}\n{title}\n{'=' * 78}")
 
-
-# ---------------------------------------------------------------------------
-# 1. Ingredient grouping
-# ---------------------------------------------------------------------------
 
 # Generic (INN) names as they are spelled in this pharmacy's catalogue.
 # Spelling variants map to one ingredient. Diclofenac sodium and potassium are
@@ -213,7 +209,8 @@ BRANDS = {
 FORMS = [  # first match wins; anything else is an oral solid (tablet/capsule)
     ("liquid", r"\b(syr|sirup|syrup|susp|elixir|dry syr)\b"),
     ("drops", r"\b(drop|drops)\b"),
-    ("topical", r"\b(cr|cream|krim|salep|oint|ointment|zalf|gel|emulgel|emugel|lotion)\b|\d+(?:[.,]\d+)?\s*%"),
+    ("topical", r"\b(cr|cream|krim|salep|oint|ointment|zalf|gel|emulgel|emugel|lotion)\b"
+                r"|\d+(?:[.,]\d+)?\s*%"),
     ("suppository", r"\b(supp|sup)\b"),
     ("inhaled", r"\b(inhaler|nebu|nebules|sol)\b"),
     ("injection", r"\b(inj|infus)\b"),
@@ -270,7 +267,7 @@ drugs = con.sql("""
 mapped = drugs["name"].map(map_drug)
 drugs["mapped"] = mapped.notna()
 for i, col in enumerate(["ingredient", "strength", "form", "source", "sure"]):
-    drugs[col] = mapped.map(lambda m: m[i] if m else None)
+    drugs[col] = mapped.map(lambda m, i=i: m[i] if m else None)
 drugs["group"] = np.where(
     drugs["mapped"],
     drugs["ingredient"] + " | " + drugs["strength"].fillna("") + " | " + drugs["form"].fillna(""),
@@ -289,7 +286,8 @@ print(f"Top 200 drugs by revenue: {top200['mapped'].sum()} mapped "
 print(f"Brand dictionary entries: {len(BRANDS)} "
       f"({sum(not v[2] for v in BRANDS.values())} marked uncertain); "
       f"found in catalogue: {(drugs['source'] == 'brand').sum()}.")
-missing = set(BRANDS) - set(drugs["name"].str.lower().str.replace(r"\s+", " ", regex=True).str.strip())
+catalogue = drugs["name"].str.lower().str.replace(r"\s+", " ", regex=True).str.strip()
+missing = set(BRANDS) - set(catalogue)
 if missing:
     print(f"Dictionary names not found in catalogue: {sorted(missing)}")
 
@@ -305,10 +303,6 @@ show = (sellers[sellers["group"].isin(multi)]
         .sort_values("lines", ascending=False))
 print("\nLargest multi-member groups (by sale lines):")
 print(show.head(15).to_string())
-
-# ---------------------------------------------------------------------------
-# 2. End-of-day stock and stock-out spells
-# ---------------------------------------------------------------------------
 
 focus = sellers[sellers["group"].isin(multi)].copy()
 con.register("focus", focus[["code"]])
@@ -338,7 +332,7 @@ stock = con.sql("""
 """).df()
 
 days = np.array(sorted(con.sql("select distinct d from sales").df()["d"]), dtype="datetime64[D]")
-weekday = (days.astype("datetime64[D]").view("int64") - 4) % 7  # 0 = Monday
+weekday = (days.view("int64") - 4) % 7  # 0 = Monday (1970-01-01 was a Thursday)
 codes_all = drugs.loc[drugs["sells"], "code"].tolist()
 col = {c: i for i, c in enumerate(codes_all)}
 
@@ -362,9 +356,9 @@ instock = (S > 0) & (prev > 0)        # stocked the whole day
 
 section("2. Stock-out spells")
 grp_members = focus.groupby("group")["code"].apply(list).to_dict()
-code_group = dict(zip(focus["code"], focus["group"]))
-sure_code = dict(zip(drugs["code"], drugs["sure"]))
-src_code = dict(zip(drugs["code"], drugs["source"]))
+code_group = dict(zip(focus["code"], focus["group"], strict=True))
+sure_code = dict(zip(drugs["code"], drugs["sure"], strict=True))
+src_code = dict(zip(drugs["code"], drugs["source"], strict=True))
 
 
 def baseline_days(j, start):
@@ -421,12 +415,9 @@ print(f"Spells tested (focal sold >= {MIN_FOCAL_RATE} lines/day over >= {MIN_BAS
       f"baseline days, and an alternative was in stock): {len(tested)} spells, "
       f"{tested['code'].nunique()} drugs, {tested['group'].nunique()} groups, "
       f"{tested['used'].sum():,} spell-days.")
-print(f"Sanity check: focal drug's own sale lines during tested spells = {tested['a_focal'].sum():.0f} "
+print("Sanity check: focal drug's own sale lines during tested spells = "
+      f"{tested['a_focal'].sum():.0f} "
       f"(expected {tested['e_focal'].sum():.0f} if it had been in stock).")
-
-# ---------------------------------------------------------------------------
-# 3. Uplift, bootstrap and placebos
-# ---------------------------------------------------------------------------
 
 
 def summarise(df):
@@ -473,7 +464,7 @@ def placebo_time(df):
 tot_lines = drugs.set_index("code")["lines"]
 pool = np.array([col[c] for c in codes_all])
 pool_lines = tot_lines.loc[codes_all].values
-ing_of = dict(zip(drugs["code"], drugs["ingredient"]))
+ing_of = dict(zip(drugs["code"], drugs["ingredient"], strict=True))
 
 
 def placebo_unrelated(df):
@@ -504,7 +495,8 @@ def report(df, label, placebos=True):
     r, s = summarise(df)
     (r_lo, r_hi), (s_lo, s_hi) = bootstrap(df)
     up = (df["a_alt"] > df["e_alt"]).mean()
-    print(f"\n[{label}] {len(df)} spells, {df['code'].nunique()} drugs, {df['group'].nunique()} groups")
+    print(f"\n[{label}] {len(df)} spells, {df['code'].nunique()} drugs, "
+          f"{df['group'].nunique()} groups")
     print(f"  Alternatives sold {df['a_alt'].sum():.0f} lines vs {df['e_alt'].sum():.0f} expected: "
           f"ratio {r:.3f} (95% bootstrap CI {r_lo:.3f}-{r_hi:.3f}); "
           f"{up:.0%} of spells above expected.")
@@ -514,7 +506,8 @@ def report(df, label, placebos=True):
         pr, ps = placebo_time(df)
         print(f"  Placebo A, random in-stock windows: ratio mean {pr.mean():.3f} "
               f"(95% range {np.percentile(pr, 2.5):.3f}-{np.percentile(pr, 97.5):.3f}); "
-              f"switch share {ps.mean():.1%} ({np.percentile(ps, 2.5):.1%} to {np.percentile(ps, 97.5):.1%}). "
+              f"switch share {ps.mean():.1%} "
+              f"({np.percentile(ps, 2.5):.1%} to {np.percentile(ps, 97.5):.1%}). "
               f"Share of placebo rounds >= real: {(pr >= r).mean():.0%}.")
         pu = placebo_unrelated(df)
         print(f"  Placebo B, unrelated drugs in the same spells: ratio mean {pu.mean():.3f} "
@@ -525,11 +518,12 @@ def report(df, label, placebos=True):
 section("3. Do alternatives sell more during a stock-out?")
 print("Ratio = alternatives' actual / weekday-matched expected sale lines. 1.0 = no change.")
 report(tested, "All tested spells")
-sure_only = tested[tested.apply(lambda r: sure_code[r.code] and all(sure_code[codes_all[a]] for a in r.alts),
-                                axis=1)]
+sure_only = tested[tested.apply(
+    lambda r: sure_code[r.code] and all(sure_code[codes_all[a]] for a in r.alts), axis=1)]
 report(sure_only, "Confident mappings only")
-gen_only = tested[tested.apply(lambda r: src_code[r.code] == "generic"
-                               and all(src_code[codes_all[a]] == "generic" for a in r.alts), axis=1)]
+gen_only = tested[tested.apply(
+    lambda r: src_code[r.code] == "generic"
+    and all(src_code[codes_all[a]] == "generic" for a in r.alts), axis=1)]
 report(gen_only, "Generic-vs-generic groups only (e.g. Amlodipine Novel vs Medicon)")
 long_ = tested[tested["used"] >= 3]
 report(long_, "Spells of 3+ trading days")
@@ -547,10 +541,6 @@ by = (tested.groupby("group")
       .sort_values("focal_lost", ascending=False))
 print(by.head(12).round(2).to_string())
 
-# ---------------------------------------------------------------------------
-# 4. Whole-group stock-outs: no same-ingredient alternative on the shelf
-# ---------------------------------------------------------------------------
-
 section("4. Whole-group stock-outs (every live member at zero)")
 # A member is "live" between its first and last sale in the data, so a drug
 # that was dropped from the range does not count as an alternative.
@@ -558,7 +548,8 @@ last_sale = len(days) - 1 - (L[::-1] > 0).argmax(axis=0)
 t_idx = np.arange(len(days))[:, None]
 live = (t_idx >= first_sale) & (t_idx <= last_sale)
 
-rev_per_line = con.sql("select code, avg(revenue) as v from sales group by code").df().set_index("code")["v"]
+rev_per_line = (con.sql("select code, avg(revenue) as v from sales group by code").df()
+                .set_index("code")["v"])
 ing_groups = focus.groupby("ingredient")["group"].unique().to_dict()
 gout, gspells = {}, []
 for g, members in grp_members.items():
@@ -590,7 +581,8 @@ for g, members in grp_members.items():
             if other:
                 rec["e_oth"], rec["a_oth"] = expected(other, window, b)
                 rec["other"] = other
-            rec["rev_line"] = float(np.average(rev_per_line.loc[members], weights=L[b][:, m].sum(axis=0) + 1e-9))
+            rec["rev_line"] = float(np.average(rev_per_line.loc[members],
+                                               weights=L[b][:, m].sum(axis=0) + 1e-9))
             rec["base"] = b
         gspells.append(rec)
         t = end
@@ -604,7 +596,8 @@ print(gs.groupby("group").agg(spells=("length", "size"), days=("length", "sum"))
       .sort_values("days", ascending=False).head(12).to_string())
 
 single_days = int((out[:, [col[c] for c in focus["code"]]]).sum())
-print(f"\nFor comparison, single-drug stock-out days across the same {len(focus)} drugs: {single_days:,}.")
+print(f"\nFor comparison, single-drug stock-out days across the same {len(focus)} drugs: "
+      f"{single_days:,}.")
 spell_days = [(r.group, np.searchsorted(days, np.datetime64(r.start, "D")) + k)
               for r in sp.itertuples() for k in range(r.length)]
 both = np.mean([gout[g][t] for g, t in spell_days])
@@ -612,7 +605,7 @@ tested_days = [(r.group, np.searchsorted(days, np.datetime64(r.start, "D")) + k)
                for r in tested.itertuples() for k in range(r.used)]
 both_t = np.mean([gout[g][t] for g, t in tested_days])
 print(f"Share of single-drug stock-out days that were also group-out days: {both:.1%} of all "
-      f"{len(spell_days):,} days; {both_t:.1%} of the {len(tested_days):,} days in the 189-style tested "
+      f"{len(spell_days):,} days; {both_t:.1%} of the {len(tested_days):,} days in the tested "
       f"spells (low by design: those needed an alternative in stock).")
 
 gt = gs.dropna(subset=["e_grp"]).reset_index(drop=True)
@@ -646,16 +639,13 @@ if len(go):
           f"(95% range {np.percentile(pr, 2.5):.2f}-{np.percentile(pr, 97.5):.2f}).")
     if len(go) < 10:
         print(f"  Only {len(go)} spells: too few to read either way.")
-print("Combination products and other ingredients in the same class are not mapped, so substitution "
-      "to them cannot be measured here; whatever is not picked up above is an upper bound on truly lost.")
+print("Combination products and other ingredients in the same class are not mapped, so "
+      "substitution to them cannot be measured here; whatever is not picked up above is an "
+      "upper bound on truly lost.")
 lost_rev = ((gt["e_grp"] - gt["a_grp"]).clip(lower=0) * gt["rev_line"]).sum()
 print(f"ESTIMATE of revenue lost on group-out days: {lost_rev / 1e6:,.1f}m rupiah "
-      f"(expected minus actual group lines x the group's average revenue per line; first {MAX_SPELL} "
-      f"days of each spell only; before any substitution credit).")
-
-# ---------------------------------------------------------------------------
-# 5. Batch and expiry
-# ---------------------------------------------------------------------------
+      "(expected minus actual group lines x the group's average revenue per line; "
+      f"first {MAX_SPELL} days of each spell only; before any substitution credit).")
 
 section("5. Batch and expiry (from sale lines)")
 e = con.sql("""
@@ -667,9 +657,12 @@ e = con.sql("""
            count(*) filter (where month(expiry) = 1 and day(expiry) = 1) as expiry_jan_1
     from sales
 """).df().iloc[0]
-print(f"Sale lines: {e.lines:,}; with an expiry date: {e.with_expiry:,} ({e.with_expiry / e.lines:.1%}). "
-      f"Placeholder batch ('SW', '-', empty): {e.placeholder_batch:,} ({e.placeholder_batch / e.lines:.1%}).")
-print(f"Expiry on the 1st of a month: {e.expiry_first_of_month / e.with_expiry:.1%} (month precision only); "
+print(f"Sale lines: {e.lines:,}; with an expiry date: {e.with_expiry:,} "
+      f"({e.with_expiry / e.lines:.1%}). "
+      f"Placeholder batch ('SW', '-', empty): {e.placeholder_batch:,} "
+      f"({e.placeholder_batch / e.lines:.1%}).")
+print(f"Expiry on the 1st of a month: {e.expiry_first_of_month / e.with_expiry:.1%} "
+      "(month precision only); "
       f"on 1 January: {e.expiry_jan_1 / e.with_expiry:.1%} (likely year-only entries); "
       f"more than 10 years out: {e.expiry_over_10y:,} (typos such as 2123).")
 
@@ -696,12 +689,15 @@ print(expired.to_string(index=False))
 # month itself are not truly expired. Also count placeholder batches.
 same_month = con.sql("""
     select count(*) filter (where expiry < d) as expired,
-           count(*) filter (where expiry < d and date_trunc('month', d) = expiry) as in_expiry_month,
-           count(*) filter (where expiry < d and (batch in ('SW', 'sw', '-') or batch is null)) as placeholder
+           count(*) filter (where expiry < d and date_trunc('month', d) = expiry)
+               as in_expiry_month,
+           count(*) filter (where expiry < d and (batch in ('SW', 'sw', '-') or batch is null))
+               as placeholder
     from sales
 """).df().iloc[0]
-print(f"Of {same_month.expired:,} 'expired' lines, {same_month.placeholder:,} carry a placeholder batch, and "
-      f"{same_month.in_expiry_month:,} are in the expiry month itself (fine if the date means end of month).")
+print(f"Of {same_month.expired:,} 'expired' lines, {same_month.placeholder:,} carry a "
+      f"placeholder batch, and {same_month.in_expiry_month:,} are in the expiry month itself "
+      "(fine if the date means end of month).")
 print("A long tail of 'expired' sales on the same few drugs suggests the POS reused an old batch "
       "record, so treat sale-line expiry as a hint, not proof that expired stock was sold.")
 

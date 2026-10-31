@@ -1,0 +1,20 @@
+RowNumber,Date,Time,DocumentNumber,TransactionType,DrugCode,DrugName,Category,InitialStock,StockIn,StockOut,RemainingStock,Unit
+1,2023-02-01,08:00:00,PB00,Pembelian (PT Satu),D1,Delta 30mg,Generik,0,1000,0,1000,Tab
+2,2023-03-01,09:00:00,PJ00,Penjualan,D1,Delta 30mg,Generik,1000,0,1,999,Tab
+3,2023-09-15,10:00:00,SO00,Stokopname,D1,Delta 30mg,Generik,999,0,990,9,Tab
+4,2023-09-20,10:00:00,PJ01,Penjualan,D1,Delta 30mg,Generik,9,0,9,0,Tab
+5,2023-10-03,08:00:00,PB01,Pembelian (PT Satu),D1,Delta 30mg,Generik,0,5,0,5,Tab
+6,2024-03-01,08:00:00,PB02,Pembelian (PT Satu),A1,Alpha 500mg,Generik,0,20,0,20,Tab
+7,2024-03-01,09:00:00,MT01,Mutasi,A1,Alpha 500mg,Generik,20,0,15,5,Tab
+8,2024-03-01,09:00:00,MT01,Mutasi,A1,Alpha 500mg,Generik,0,15,0,15,Tab
+9,2024-03-02,10:00:00,PJ02,Penjualan,A1,Alpha 500mg,Generik,5,0,5,0,Tab
+10,2024-03-02,11:00:00,PJ03,Penjualan,B1,Beta syrup,Patent,0,0,3,-3,Btl
+11,2024-03-03,09:00:00,SO01,Stokopname,B1,Beta syrup,Patent,-3,5,0,2,Btl
+12,2024-03-04,08:00:00,MT02,Mutasi,A1,Alpha 500mg,Generik,15,0,15,0,Tab
+13,2024-03-04,08:00:00,MT02,Mutasi,A1,Alpha 500mg,Generik,0,15,0,15,Tab
+14,2024-03-05,11:00:00,PJ04,Penjualan,A1,Alpha 500mg,Generik,15,0,15,0,Tab
+15,2024-03-05,12:00:00,PJ05,Penjualan,C1,Gamma cream,Patent,7,0,1,6,Tube
+16,2024-03-08,09:00:00,PB03,Pembelian (PT Dua),A1,Alpha 500mg,Generik,0,10,0,10,Tab
+17,2024-03-08,12:00:00,PJ06,Penjualan,A1,Alpha 500mg,Generik,10,0,4,6,Tab
+18,2024-03-08,11:00:00,PJ07,Penjualan,A1,Alpha 500mg,Generik,6,0,1,5,Tab
+19,2024-03-09,10:00:00,PJ08,Penjualan,A1,Alpha 500mg,Generik,5,0,5,0,Tab

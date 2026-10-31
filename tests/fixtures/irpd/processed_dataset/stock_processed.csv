@@ -1,0 +1,9 @@
+RowNumber,Date,Time,DocumentNumber,TransactionType,DrugCode,DrugName,Category,InitialStock,StockIn,StockOut,RemainingStock,Unit
+1,2024-01-01,20:00:00,PB01,Pembelian (Antar Mitra Sembada),D1,Amoxicillin 500mg,Generik,0,30,0,30,Tab
+2,2024-01-01,20:01:00,MT01,Mutasi,D1,Amoxicillin 500mg,Generik,30,0,10,20,Tab
+3,2024-01-01,20:01:00,MT01,Mutasi,D1,Amoxicillin 500mg,Generik,0,10,0,10,Tab
+4,2024-01-02,08:00:00,PJ01,Penjualan,D1,Amoxicillin 500mg,Generik,20,0,10,10,Tab
+5,2024-01-02,08:05:00,PJ02,Penjualan,D2,Flazen 50,Patent,10,0,10,0,Tab
+6,2024-01-03,09:00:00,PJ03,Penjualan,D1,Amoxicillin 500mg,Generik,10,0,5,5,Tab
+7,2024-01-04,10:00:00,PJ04,Penjualan,D1,Amoxicillin 500mg,Generik,5,0,5,0,Tab
+8,2024-01-05,11:00:00,SO01,Stokopname,D2,Flazen 50,Patent,0,2,0,2,Tab
