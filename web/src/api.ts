@@ -29,6 +29,25 @@ export interface Actuals {
   stock: StockDay[]; sales: SaleDay[]; purchases: Purchase[]; stockouts: Spell[]; shelfouts: Spell[];
 }
 
+/** A 4-week forecast made on week_start from the data up to then (holdout view only). */
+export interface RollingPoint { week_start: string; current: number; ml: number | null }
+
+export interface ForecastRun {
+  method: string;
+  weekly: { week_start: string; mean: number; p90: number }[];
+  total_mean: number;
+  total_p90: number;
+  plan: { s: number | null; S: number | null; order_now: number | null;
+          lead_days: number | null; stock_total: number | null };
+}
+
+export interface DrugForecast {
+  weeks: number;
+  total_weeks: number;
+  current: ForecastRun;
+  ml: ForecastRun | null;
+}
+
 export interface DrugPage extends Omit<Actuals, "stockouts"> {
   drug: DrugRow;
   as_of: string;
@@ -36,7 +55,33 @@ export interface DrugPage extends Omit<Actuals, "stockouts"> {
   stockouts: Spell[];
   prices: Price[];
   alternatives: Alternative[];
-  holdout: Actuals | null;
+  forecast: DrugForecast;
+  holdout: (Actuals & { rolling: RollingPoint[] | null; h2?: H2Score | null }) | null;
+}
+
+/** How a drug's weekly 4-week forecasts did in H2 2025, on windows with no stock-out. */
+export interface H2Score {
+  windows: number; avg_sold: number; miss_current: number; miss_ml: number | null;
+  ml_closer: number | null; current_closer: number | null;
+}
+
+export interface ForecastListRow {
+  code: string; name: string; tier: string; revenue: number;
+  next_current: number | null; total_current: number | null;
+  next_ml: number | null; total_ml: number | null;
+  h2?: H2Score | null;
+}
+
+/** The weekly forecasts a chart draws. */
+export type ForecastLine = Pick<ForecastRun, "method" | "weekly">;
+
+export interface DrugChart {
+  drug: DrugRow;
+  sales: SaleDay[];
+  stockouts: Spell[];
+  current: ForecastLine;
+  ml: ForecastLine | null;
+  holdout: { sales: SaleDay[]; stockouts: Spell[]; rolling: RollingPoint[] | null } | null;
 }
 
 export interface TierStats {
@@ -126,6 +171,10 @@ export const api = {
   search: (q: string) => get<DrugRow[]>(`/drugs?q=${encodeURIComponent(q)}&limit=12`),
   drug: (code: string, holdout: boolean) =>
     get<DrugPage>(`/drugs/${encodeURIComponent(code)}?holdout=${holdout}`),
+  forecasts: (holdout: boolean) =>
+    get<{ as_of: string; drugs: ForecastListRow[] }>(`/forecasts?holdout=${holdout}`),
+  forecastCharts: (codes: string[], holdout: boolean) =>
+    get<DrugChart[]>(`/forecasts/charts?codes=${codes.map(encodeURIComponent).join(",")}&holdout=${holdout}`),
   replay: () => get<Replay>("/replay"),
   contest: () => get<Contest | null>("/contest"),
 };

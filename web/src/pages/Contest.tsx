@@ -110,6 +110,9 @@ export function ContestView({ c, fairContest }: { c: Contest; fairContest?: stri
           <li>Deliveries always arrive on time in the simulation, so the real ledger looks much
             worse than any simulated policy. Compare with the copy of the pharmacist instead.</li>
           <li>One frozen run per model. Another run of the same model could land elsewhere.</li>
+          <li>Each policy is set once and held for six months, then rescaled to the pharmacist's
+            stock value. That shows big gaps, such as consistent rules against habit, but can't
+            reliably separate close methods, such as one forecaster against another.</li>
           <DataCaveats c={c} />
         </ul>
       </section>

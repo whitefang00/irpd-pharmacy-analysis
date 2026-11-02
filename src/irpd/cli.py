@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> None:
                    add_help=False)
     sub.add_parser("contest", help="agent vs pharmacist: plan or score (see irpd contest -h)",
                    add_help=False)
+    sub.add_parser("ml", help="ML forecasting experiments (see irpd ml -h)", add_help=False)
     args, rest = ap.parse_known_args(argv)
     if args.command == "evals":
         from irpd.agent import run_evals
@@ -32,6 +33,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "contest":
         from irpd import contest
         contest.main(rest)
+        return
+    if args.command == "ml":
+        from irpd.ml import cli as ml_cli
+        ml_cli.main(rest)
         return
     if rest:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")

@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from irpd import holdout, policies, replay
+from irpd import config, holdout, policies, replay
+from irpd.ml import rolling
 
 FAIR_CONTEST = (
     "The simulation delivers every order on time, so it can't reproduce the long "
@@ -46,7 +47,75 @@ def drug_actuals(code: str, sealed: Path) -> dict:
         "purchases": _records(purchases),
         "stockouts": _spells(stock["date"], out_days),
         "shelfouts": _spells(stock["date"], shelf_days),
+        # Each week's 4-week forecast from both forecasters, made with data up to
+        # that week (None until `irpd ml rolling` has run).
+        "rolling": rolling.for_drug(code),
     }
+
+
+def h2_scores(agent: Path, sealed: Path) -> dict[str, dict]:
+    """Per drug, how each forecaster's weekly 4-week forecasts did in H2 2025.
+
+    A window is the 4 weeks from a forecast's week_start. Only windows with no
+    stock-out day count, since sales on those days understate demand. The
+    first window starts on the cutoff day, which is in the agent file, so its
+    sales and stock come from there. Empty until `irpd ml rolling` has run.
+    """
+    if not rolling.FILE.exists():
+        return {}
+    stamp = (rolling.FILE.stat().st_mtime_ns, sealed.stat().st_mtime_ns)
+    return _h2_scores(agent, sealed, stamp)
+
+
+@lru_cache(maxsize=2)
+def _h2_scores(agent: Path, sealed: Path, stamp: tuple) -> dict[str, dict]:
+    r = rolling._load(rolling.FILE, stamp[0])
+    sales_sql = "SELECT drug_code, date, units FROM daily_demand"
+    out_sql = ("SELECT drug_code, date FROM daily_stock "
+               "WHERE location = 'total' AND coalesce(closing, 0) <= 0")
+    first = f" WHERE date = DATE '{config.CUTOFF.isoformat()}'"
+    with holdout.open_sealed(sealed) as con:
+        sales, out = con.execute(sales_sql).df(), con.execute(out_sql).df()
+    with holdout.agent_view(agent=agent) as con:
+        sales = pd.concat([con.execute(sales_sql + first).df(), sales])
+        out = pd.concat([con.execute(out_sql.replace("WHERE", first + " AND", 1)).df(), out])
+    days = pd.date_range(config.CUTOFF, config.LAST_DAY).date
+    codes = r.drug_code.unique()
+    col = {d: i for i, d in enumerate(days)}
+    row = {c: i for i, c in enumerate(codes)}
+
+    def grid(df: pd.DataFrame, values) -> np.ndarray:
+        g = np.zeros((len(codes), len(days) + 1))  # column 0 stays 0 for the cumsum
+        d = pd.to_datetime(df.date).dt.date
+        keep = (df.drug_code.isin(row) & d.isin(col)).to_numpy()
+        i = df.drug_code[keep].map(row).to_numpy(int)
+        j = d[keep].map(col).to_numpy(int) + 1
+        np.add.at(g, (i, j), values[keep] if values is not None else 1)
+        return g.cumsum(axis=1)
+
+    sold_cs = grid(sales, sales.units.to_numpy(float))
+    out_cs = grid(out, None)
+    i = r.drug_code.map(row).to_numpy()
+    start = pd.to_datetime(r.week_start).dt.date.map(col).to_numpy()
+    end = start + 28
+    sold = sold_cs[i, end] - sold_cs[i, start]
+    clean = (out_cs[i, end] - out_cs[i, start]) == 0
+    w = pd.DataFrame({"code": r.drug_code, "sold": sold, "current": r.current, "ml": r.ml})
+    w = w[clean]
+    scores = {}
+    for code, g in w.groupby("code", sort=False):
+        if g.ml.notna().any():
+            g = g[g.ml.notna()]
+        e_cur, e_ml = (g.current - g.sold).abs(), (g.ml - g.sold).abs()
+        has_ml = g.ml.notna().all()
+        scores[code] = {
+            "windows": len(g), "avg_sold": round(float(g.sold.mean()), 1),
+            "miss_current": round(float(e_cur.mean()), 1),
+            "miss_ml": round(float(e_ml.mean()), 1) if has_ml else None,
+            "ml_closer": int((e_ml < e_cur).sum()) if has_ml else None,
+            "current_closer": int((e_ml > e_cur).sum()) if has_ml else None,
+        }
+    return scores
 
 
 def _records(df: pd.DataFrame) -> list[dict]:

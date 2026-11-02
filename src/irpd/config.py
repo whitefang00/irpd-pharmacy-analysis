@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # e.g. at the small test fixtures.
 DATA = Path(os.environ.get("IRPD_DATA", ROOT / "data/raw/irpd"))
 WAREHOUSE = Path(os.environ.get("IRPD_DB", ROOT / "data/warehouse/irpd.duckdb"))
+# Outputs of the ML forecasting experiments (panels, predictions, run log).
+ML_DIR = Path(os.environ.get("IRPD_ML_DIR", ROOT / "data/ml"))
 
 FIRST_DAY = date(2023, 1, 2)
 LAST_DAY = date(2025, 12, 31)

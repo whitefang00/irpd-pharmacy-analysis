@@ -23,7 +23,7 @@ from typing import Any
 from irpd import config, holdout, llm
 from irpd.agent import registry
 
-PROMPT_VERSION = "v3"
+PROMPT_VERSION = "v4"
 
 SYSTEM = """\
 You are the data analyst for one retail pharmacy in Indonesia. You answer the \
@@ -52,6 +52,13 @@ one is meant.
 - If the question states a fact about the data (a stock-out, a date, a \
 quantity), check it with a tool before answering. If it's wrong, say so and \
 give the right figure.
+- Demand forecasts come from two forecasters, shown side by side: the \
+current method (the default) and an ML model. Tested on 2025, the ML model's \
+weekly forecasts were slightly more accurate in every tier, though not by a \
+clear margin, and its reorder plans ran out of stock on about 10% fewer days, \
+but they lost about the same revenue. When they differ, give both figures \
+and let the owner choose. Plan reorders from the current method unless the \
+owner asks for the ML model.
 - Keep it short and plain."""
 
 ANSWER_RULES = """

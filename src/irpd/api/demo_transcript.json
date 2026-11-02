@@ -217,11 +217,13 @@
         ],
         "tier": null,
         "service_level": 0.95,
-        "lead_days": null
+        "lead_days": null,
+        "forecaster": "current"
       },
       "output": {
         "as_of": "2025-06-30",
         "service_level": 0.95,
+        "forecaster": "current",
         "drugs_planned": 1,
         "drugs_to_order_now": 1,
         "plan": [

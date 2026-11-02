@@ -82,6 +82,33 @@ only 1-2 points of weighted percentage error. Its value is elsewhere: it is
 unbiased in Eid weeks, and its 90th-percentile forecast covers about 90% of
 weeks at every horizon, which is what reorder points need.
 
+The ML forecaster ([`src/irpd/ml/`](../src/irpd/ml/)) is one LightGBM model
+for every drug. Each row is a drug, a forecast date and a week ahead (1 to 8).
+The features are the drug's own sales history, stock-outs, price, store
+traffic, its tier and form, and the Eid calendar. Its setup is frozen in the
+private lab notes: Tweedie loss, default settings, three seeds. Its spread uses
+the same negative binomial recipe as the current method, so both plug into the
+same reorder rule. The panel builder has leak tests: every feature must match
+when the data is cut at the forecast date.
+
+- `irpd ml serve` trains it on data up to 30 June 2025 and saves eight weeks of
+  forecasts for the app. It takes about a minute.
+- `irpd ml rolling` forecasts every week of H2 2025 with both methods,
+  retraining each week, for the drug page's holdout view. It takes about
+  10 minutes.
+
+Without these files the app shows the current method only. How the two compare,
+and why both are nearly flat, is in
+[results.md](results.md#forecasting).
+
+[`src/irpd/evalx/`](../src/irpd/evalx/) scores forecasts the way the reorder
+rule uses them. It covers pinball loss and coverage of lead-time totals, a
+bootstrap over both forecast dates and drugs, and a replay that re-plans every
+14 days. The follow-up analysis in [eda/followup](../eda/followup/) uses it.
+Options in `forecast.py` and `src/irpd/ml/` cover the fixes it tested: Eid day
+counts and a units-based Eid profile, censoring-aware training targets, and a
+TSB forecaster for fading drugs. All of them are off by default.
+
 ## Lost demand
 
 [`src/irpd/lost.py`](../src/irpd/lost.py) estimates the missed sales and the
@@ -128,6 +155,11 @@ uv run irpd build                     # warehouse + sealed holdout, a few second
 uv run irpd replay                    # mimic and textbook vs the ledger on H2 2025
 uv run irpd replay --uncensored       # the same, with lost demand added back
 uv run pytest
+
+# Optional: the ML forecaster (Forecasts page and drug page)
+uv sync --extra ml
+uv run irpd ml serve                  # about a minute
+uv run irpd ml rolling                # about 10 minutes
 ```
 
 Anything that calls a model needs `OPENAI_API_KEY` in a `.env` file at the

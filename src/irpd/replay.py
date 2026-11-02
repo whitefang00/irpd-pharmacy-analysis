@@ -284,6 +284,81 @@ def simulate(policy: pd.DataFrame, h: Holdout) -> Run:
     return Run(**out)
 
 
+# ---- time-varying policies (re-planned during the window) ---------------
+
+TV_KEYS = ("s", "S", "floor_min", "floor_max")
+
+
+def schedule(policies: list[tuple[int, pd.DataFrame]], h: Holdout) -> dict[str, np.ndarray]:
+    """Drugs x days policy arrays from policies that each take effect on a day index.
+
+    `policies` is [(day index, policy), ...], the first at index 0. Each holds
+    until the next one starts. A drug missing from a later policy keeps its
+    last rule. Lead times are the first policy's (they are facts, not choices).
+    """
+    if not policies or policies[0][0] != 0:
+        raise ValueError("the first policy must start on day index 0")
+    n, T = len(h.drugs), len(h.days)
+    out = {k: np.zeros((n, T)) for k in TV_KEYS}
+    lead, prev = None, None
+    for j, (t, pol) in enumerate(policies):
+        p = pol.set_index("drug_code") if "drug_code" in pol else pol
+        if prev is not None:
+            p = pd.concat([p, prev[~prev.index.isin(p.index)]])
+        prev = p
+        a = policy_arrays(p, h)
+        stop = policies[j + 1][0] if j + 1 < len(policies) else T
+        for k in TV_KEYS:
+            out[k][:, t:stop] = a[k][:, None]
+        lead = a["lead"] if lead is None else lead
+    out["lead"] = lead
+    return out
+
+
+def simulate_tv(p: dict[str, np.ndarray], h: Holdout, k: float = 1.0,
+                floor_cap: np.ndarray | None = None) -> Run:
+    """`simulate` for policy arrays that change by day (`schedule`), s and S times `k`.
+
+    One day runs exactly as in `simulate`. `floor_cap` (per drug, NaN = none)
+    limits how far the floor is topped up: a stand-in for shelf space, which
+    the plain sim treats as unlimited. With one policy, no cap and k = 1 it
+    gives the same run as `simulate`.
+    """
+    n, T = len(h.drugs), len(h.days)
+    floor, store = h.start_floor.astype(float).copy(), h.start_store.astype(float).copy()
+    lead = p["lead"]
+    pipeline = np.zeros((n, T + lead.max() + 1))
+    out = {x: np.zeros((n, T)) for x in ("floor", "store", "sold", "unmet", "ordered")}
+    rows = np.arange(n)
+    cap = None if floor_cap is None else np.where(np.isnan(floor_cap), np.inf, floor_cap)
+    for t, day in enumerate(h.days):
+        arriving = pipeline[:, t]
+        if day < h.store_opens:
+            floor += arriving
+        else:
+            store += arriving
+        fmax = np.where(np.isnan(p["floor_max"][:, t]), p["S"][:, t] * k, p["floor_max"][:, t])
+        if cap is not None:
+            fmax = np.minimum(fmax, cap)
+        move = np.where((floor <= p["floor_min"][:, t]) & (store > 0),
+                        np.clip(fmax - floor, 0, store), 0)
+        floor, store = floor + move, store - move
+        adj = h.adjust[:, t]
+        from_floor = np.maximum(adj, -floor)
+        floor = floor + from_floor
+        store = np.maximum(store + (adj - from_floor), 0)
+        sold = np.minimum(h.demand[:, t], np.maximum(floor, 0))
+        floor -= sold
+        position = floor + store + pipeline[:, t + 1:].sum(axis=1)
+        s, S = p["s"][:, t] * k, p["S"][:, t] * k
+        order = np.where(position <= s, np.maximum(S - position, 0), 0)
+        pipeline[rows, t + lead] += order
+        for x, v in (("floor", floor), ("store", store), ("sold", sold),
+                     ("unmet", h.demand[:, t] - sold), ("ordered", order)):
+            out[x][:, t] = v
+    return Run(**out)
+
+
 def _spell_rate(out: np.ndarray, rate: np.ndarray) -> np.ndarray:
     """For each out day, the rate on the first day of its spell (0 elsewhere)."""
     held = np.zeros_like(rate)
@@ -304,14 +379,32 @@ def _spell_length(out: np.ndarray) -> np.ndarray:
     return np.where(out, fwd + back - 1, 0)
 
 
-def metrics(floor: np.ndarray, store: np.ndarray, sold: np.ndarray,
-            h: Holdout) -> pd.DataFrame:
-    """Per-drug scores from daily end-of-day floor, store and units sold."""
+@dataclass
+class Losses:
+    """Daily out flags and lost units (drugs x days), as `metrics` counts them."""
+
+    stockout: np.ndarray
+    shelfout: np.ndarray
+    lost_out: np.ndarray
+    lost_shelf: np.ndarray
+
+
+def losses(floor: np.ndarray, store: np.ndarray, sold: np.ndarray, h: Holdout) -> Losses:
+    """Which days are stock-outs and shelf-outs, and the units lost on each."""
     total = floor + store
     stockout = (total <= 0) & h.live
     shelfout = (floor <= 0) & (store > 0) & ~stockout & h.live
     lost_out = np.maximum(_spell_rate(stockout, h.rate) - sold, 0) * stockout
     lost_shelf = np.maximum(_spell_rate(shelfout, h.rate) - sold, 0) * shelfout
+    return Losses(stockout, shelfout, lost_out, lost_shelf)
+
+
+def metrics(floor: np.ndarray, store: np.ndarray, sold: np.ndarray,
+            h: Holdout) -> pd.DataFrame:
+    """Per-drug scores from daily end-of-day floor, store and units sold."""
+    total = floor + store
+    x = losses(floor, store, sold, h)
+    stockout, shelfout, lost_out, lost_shelf = x.stockout, x.shelfout, x.lost_out, x.lost_shelf
     price = h.price[:, None]
     return pd.DataFrame({
         "drug_code": h.drugs,

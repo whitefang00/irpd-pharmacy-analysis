@@ -5,12 +5,14 @@ module must never import or open the sealed holdout; `irpd.api.sealed` is the
 only place in the app that does (`tests/test_api.py` checks).
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import duckdb
+import numpy as np
 
 from irpd import config
+from irpd import forecast as fc
 
 
 def _rows(con: duckdb.DuckDBPyConnection, sql: str, params: list | None = None) -> list[dict]:
@@ -86,6 +88,103 @@ def drug(con: duckdb.DuckDBPyConnection, code: str) -> dict | None:
             SELECT unit, price, valid_from, valid_to FROM prices
             WHERE drug_code = ? ORDER BY unit, valid_from""", p),
         "alternatives": alternatives(con, code),
+        "forecast": forecast(con, code),
+    }
+
+
+FORECAST_WEEKS = 8
+TOTAL_WEEKS = 4  # the headline total, as the agent's forecast questions ask
+
+
+def forecast(con: duckdb.DuckDBPyConnection, code: str) -> dict:
+    """Both forecasters for one drug: weekly means and p90, a 4-week total, a reorder plan.
+
+    `ml` is None when no ML forecasts are saved for the cutoff.
+    """
+    from irpd.agent.tools.plan import reorder_rows
+
+    out: dict = {"weeks": FORECAST_WEEKS, "total_weeks": TOTAL_WEEKS}
+    for name in fc.FORECASTERS:
+        try:
+            f = fc.forecast(con, [code], config.CUTOFF, FORECAST_WEEKS, forecaster=name)
+            plan = reorder_rows(con, [code], config.CUTOFF, forecaster=name).iloc[0]
+        except FileNotFoundError:
+            out[name] = None
+            continue
+        head = f.iloc[:TOTAL_WEEKS]
+        total_p90 = fc.demand_quantile(np.array([head["mean"].sum()]),
+                                       np.array([head["var"].sum()]), 0.9)[0]
+        num = lambda v: None if v is None or v != v else float(v)  # noqa: E731
+        out[name] = {
+            "method": str(f.method.iloc[0]),
+            "weekly": [{"week_start": r.week_start.isoformat(), "mean": round(float(r.mean), 2),
+                        "p90": float(r.p90)} for r in f.itertuples()],
+            "total_mean": round(float(head["mean"].sum()), 1), "total_p90": float(total_p90),
+            "plan": {k: num(plan[k]) for k in ("s", "S", "order_now", "lead_days",
+                                                "stock_total")},
+        }
+    return out
+
+
+def forecast_list(con: duckdb.DuckDBPyConnection) -> list[dict]:
+    """Every drug sold by the cutoff, by revenue: both forecasters' next week and 4 weeks.
+
+    ML values are None when no ML forecasts are saved for the cutoff.
+    """
+    drugs = _drug_rows(con, "t.tier IS NOT NULL", [1_000_000])
+    weekly = {}
+    for name in fc.FORECASTERS:
+        try:
+            f = fc.forecast(con, None, config.CUTOFF, TOTAL_WEEKS, forecaster=name)
+        except FileNotFoundError:
+            continue
+        g = f.groupby("drug_code", sort=False)["mean"]
+        weekly[name] = (g.first().to_dict(), g.sum().to_dict())
+    out = []
+    for d in drugs:
+        row = {k: d[k] for k in ("code", "name", "tier", "revenue")}
+        for name in fc.FORECASTERS:
+            nxt, tot = weekly.get(name, ({}, {}))
+            row[f"next_{name}"] = _round(nxt.get(d["code"]))
+            row[f"total_{name}"] = _round(tot.get(d["code"]))
+        out.append(row)
+    return out
+
+
+def _round(v) -> float | None:
+    return None if v is None else round(float(v), 2)
+
+
+CHART_WEEKS = 26  # sales history on the forecasts page charts
+
+
+def chart(con: duckdb.DuckDBPyConnection, code: str) -> dict | None:
+    """One drug's small chart: recent daily sales, stock-outs, next week's forecasts."""
+    found = search_one(con, code)
+    if found is None:
+        return None
+    since = config.CUTOFF - timedelta(weeks=CHART_WEEKS + 1)
+    p = [code, since]
+    runs: dict = {}
+    for name in fc.FORECASTERS:
+        try:
+            f = fc.forecast(con, [code], config.CUTOFF, 1, forecaster=name)
+        except FileNotFoundError:
+            runs[name] = None
+            continue
+        runs[name] = {"method": str(f.method.iloc[0]),
+                      "weekly": [{"week_start": r.week_start.isoformat(),
+                                  "mean": round(float(r.mean), 2), "p90": float(r.p90)}
+                                 for r in f.itertuples()]}
+    return {
+        "drug": found,
+        "sales": _rows(con, """
+            SELECT date, units, revenue::BIGINT AS revenue FROM daily_demand
+            WHERE drug_code = ? AND date >= ? ORDER BY date""", p),
+        "stockouts": _rows(con, """
+            SELECT start, stop, days, ended_by FROM stockouts
+            WHERE drug_code = ? AND stop >= ? ORDER BY start""", p),
+        **runs,
     }
 
 

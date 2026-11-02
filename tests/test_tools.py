@@ -2,9 +2,10 @@
 
 import json
 import math
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
 import pytest
 import tools_fixture
 from test_as_of import cut
@@ -231,20 +232,83 @@ def test_price_history_stops_at_the_day(built):
 
 # Forecast and plans
 
+def save_ml(day, means: dict[str, list[float]], config_hash=None):
+    """Write saved ML forecasts as `irpd ml serve` would: weeks 1..n from `day`'s origin."""
+    from irpd.ml import schema, serve
+
+    origin = schema.policy_origin(day)
+    rows = [(c, h + 1, origin + timedelta(days=1, weeks=h), m)
+            for c, ms in means.items() for h, m in enumerate(ms)]
+    pd.DataFrame(rows, columns=["drug_code", "h", "week_start", "mean"]).to_csv(
+        serve.FORECAST_FILE, index=False)
+    serve.FORECAST_FILE.with_suffix(".json").write_text(json.dumps(
+        {"day": day.isoformat(), "config_hash": config_hash or serve.CONFIG_HASH}))
+
+
 def test_forecast(con):
     out = call(con, "forecast", drugs=["P1", "Sanmol tab 500"], horizon_weeks=3)
     f = {x["drug_code"]: x for x in out["forecasts"]}
     assert set(f) == {"P1", "P2"}
-    assert len(f["P2"]["weeks"]) == 3 and f["P2"]["weeks"][0]["week_start"] == "2025-06-30"
-    assert f["P2"]["weeks"][0]["mean"] == pytest.approx(28, rel=0.2)
-    for w in f["P2"]["weeks"]:
+    assert f["P2"]["ml"] is None and "ML" in out["note"]
+    cur = f["P2"]["current"]
+    assert len(cur["weeks"]) == 3 and cur["weeks"][0]["week_start"] == "2025-06-30"
+    assert cur["weeks"][0]["mean"] == pytest.approx(28, rel=0.2)
+    for w in cur["weeks"]:
         assert w["p50"] <= w["p90"]
-    assert f["P2"]["total_p90"] >= f["P2"]["total_mean"]
+    assert cur["total_p90"] >= cur["total_mean"]
+
+
+def test_forecast_shows_the_ml_model_beside_the_current_method(con):
+    save_ml(CUTOFF, {"P2": [40, 41, 42, 43, 44, 45, 46, 47]})
+    out = call(con, "forecast", drugs=["P1", "P2"], horizon_weeks=10)
+    assert "note" not in out
+    f = {x["drug_code"]: x for x in out["forecasts"]}
+    ml = f["P2"]["ml"]
+    assert ml["method"] == "ml"
+    # Weeks past the saved 8 repeat week 8.
+    assert [w["mean"] for w in ml["weeks"]] == [40, 41, 42, 43, 44, 45, 46, 47, 47, 47]
+    assert ml["total_mean"] == pytest.approx(442)
+    assert f["P2"]["current"]["weeks"][0]["mean"] == pytest.approx(28, rel=0.2)
+    # P1 has no saved forecast: the ML column falls back to the current method.
+    assert f["P1"]["ml"]["method"] == f["P1"]["current"]["method"] != "ml"
+    assert f["P1"]["ml"]["weeks"] == f["P1"]["current"]["weeks"]
+
+
+def test_forecast_spread_uses_the_same_recipe_for_both(con):
+    from irpd import forecast as fc
+
+    save_ml(CUTOFF, {"P2": [56.0] * 8})
+    cur = fc.forecast(con, ["P2"], CUTOFF, 8)
+    ml = fc.forecast(con, ["P2"], CUTOFF, 8, forecaster="ml")
+    assert (ml["var"] / ml["mean"]).to_numpy() == pytest.approx(
+        (cur["var"] / cur["mean"]).to_numpy())
+
+
+def test_saved_ml_forecasts_for_another_day_or_config_are_not_used(con):
+    from irpd import forecast as fc
+
+    save_ml(date(2025, 6, 1), {"P2": [40.0] * 8})
+    with pytest.raises(FileNotFoundError):
+        fc.forecast(con, ["P2"], CUTOFF, 8, forecaster="ml")
+    save_ml(CUTOFF, {"P2": [40.0] * 8}, config_hash="something-else")
+    with pytest.raises(ValueError, match="config"):
+        fc.forecast(con, ["P2"], CUTOFF, 8, forecaster="ml")
+
+
+def test_reorder_plan_can_use_the_ml_forecast(con):
+    save_ml(CUTOFF, {"P1": [200.0] * 8})
+    args = dict(drugs=["P1"], tier=None, service_level=0.95, lead_days=None)
+    cur = call(con, "reorder_plan", **args, forecaster="current")["plan"][0]
+    ml = call(con, "reorder_plan", **args, forecaster="ml")
+    assert ml["forecaster"] == "ml"
+    # About 10 a day now; the ML file says about 29.
+    assert ml["plan"][0]["s"] > 2 * cur["s"]
+    assert "forecaster" in call(con, "reorder_plan", **args, forecaster="x")["error"]
 
 
 def test_reorder_plan_and_policy(con):
     out = call(con, "reorder_plan", drugs=None, tier="fast", service_level=0.95,
-               lead_days=None)
+               lead_days=None, forecaster="current")
     assert out["drugs_planned"] == 5
     rows = {r["drug_code"]: r for r in out["plan"]}
     assert rows["P1"]["lead_days"] == 14 and rows["P2"]["lead_days"] == 7
@@ -254,7 +318,8 @@ def test_reorder_plan_and_policy(con):
     # About 10 a day over 14 days, with a margin.
     assert 140 <= rows["P1"]["s"] <= 200
 
-    out = call(con, "reorder_plan", drugs=["P1"], tier=None, service_level=0.8, lead_days=3)
+    out = call(con, "reorder_plan", drugs=["P1"], tier=None, service_level=0.8, lead_days=3,
+               forecaster="current")
     assert out["plan"][0]["lead_days"] == 3 and out["plan"][0]["s"] < rows["P1"]["s"]
 
     policy = to_policy(reorder_rows(con, ["P1", "P2"], CUTOFF))
@@ -265,7 +330,7 @@ def test_reorder_plan_and_policy(con):
 @pytest.mark.parametrize("lead_days", [-3, 0, 61])
 def test_reorder_plan_refuses_a_lead_time_out_of_range(con, lead_days):
     out = call(con, "reorder_plan", drugs=["P1"], tier=None, service_level=0.95,
-               lead_days=lead_days)
+               lead_days=lead_days, forecaster="current")
     assert "lead_days" in out["error"]
 
 
@@ -283,7 +348,7 @@ CALLS = [
     ("price_history", {"drug": "P1"}),
     ("forecast", {"drugs": ["P1", "T1"], "horizon_weeks": 4}),
     ("reorder_plan", {"drugs": ["P1", "P2", "T1"], "tier": None, "service_level": 0.9,
-                      "lead_days": None}),
+                      "lead_days": None, "forecaster": "current"}),
     ("transfer_plan", {"drugs": None}),
 ]
 

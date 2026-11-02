@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DrugPage, DrugRow } from "../api";
+import type { DrugPage, DrugRow, ForecastRun, H2Score } from "../api";
 import { api, day, num, rp } from "../api";
+import { ForecastChart } from "../charts/ForecastChart";
 import { StockChart } from "../charts/StockChart";
 import { DAY, iso, ms } from "../charts/util";
 import { Seg } from "./Contest";
@@ -38,6 +39,7 @@ export function DrugPageView({ code }: { code?: string }) {
             <Charts page={page} range={range} />
             <SpellSummary page={page} />
           </section>
+          <Forecast page={page} />
           <div className="grid2">
             <Alternatives page={page} />
             <div className="stack">
@@ -70,6 +72,92 @@ function Charts({ page, range }: { page: DrugPage; range: Range }) {
     />
   );
 }
+
+const HISTORY_WEEKS = 26;
+
+function Forecast({ page }: { page: DrugPage }) {
+  const f = page.forecast;
+  const h = page.holdout;
+  const rows: [string, ForecastRun | null][] = [["Current method", f.current], ["ML model", f.ml]];
+  const mlFallback = f.ml != null && f.ml.method !== "ml";
+  return (
+    <section className="card stack" style={{ gap: 8 }}>
+      <h2>Demand forecast</h2>
+      <p className="small">
+        Two forecasts of weekly demand from {day(page.as_of)}. The <b>current method</b> smooths
+        this drug's own sales and adds the Eid lift; the <b>ML model</b> learns from every drug's
+        sales, stock-outs, price and store traffic. Tested on 2025, the ML model was slightly more
+        accurate and its reorder plans ran out of stock on about 10% fewer days, but they lost about
+        the same revenue. Reorder plans use the current method unless you choose the ML model.
+      </p>
+      <ForecastChart sales={[...page.sales, ...(h?.sales ?? [])]}
+                     stockouts={[...page.stockouts, ...(h?.stockouts ?? [])]}
+                     current={f.current} ml={f.ml} historyWeeks={HISTORY_WEEKS} showActuals={!!h}
+                     rolling={h?.rolling} />
+      {h?.rolling && h.rolling.length > 0 && <H2Score page={page} />}
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left" }}>Forecast</th>
+              <th>Next {f.total_weeks} weeks</th><th>High case (p90)</th>
+              <th>Reorder at</th><th>Order up to</th><th>Order now</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([label, r]) => (
+              <tr key={label}>
+                <td style={{ textAlign: "left" }}>
+                  <i className="key-line" style={{ background: label === "ML model" ? "var(--s2)" : "var(--s1)", marginRight: 8, verticalAlign: "middle" }} />
+                  {label}{label === "Current method" && <span className="muted"> · default</span>}
+                </td>
+                {r ? <>
+                  <td>{num(Math.round(r.total_mean))}</td><td>{num(r.total_p90)}</td>
+                  <td>{fmt(r.plan.s)}</td><td>{fmt(r.plan.S)}</td><td><b>{fmt(r.plan.order_now)}</b></td>
+                </> : <td colSpan={5} className="muted">Not built: run <code>irpd ml serve</code></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">
+        Units are this drug's base unit. Reorder when total stock ({fmt(f.current.plan.stock_total)} now)
+        falls to the reorder point; order up to cover a {fmt(f.current.plan.lead_days)}-day lead time
+        plus 14 days, at a 95% service level.
+        {mlFallback && " The ML model has no forecast for this drug (no sale in the past year), so its row repeats the current method."}
+        {h && " Bars after the cutoff are what actually sold in the holdout."}
+      </p>
+    </section>
+  );
+}
+
+/** What the holdout-on lines are, and this drug's H2 2025 score. */
+function H2Score({ page }: { page: DrugPage }) {
+  const h = page.holdout!;
+  return (
+    <p className="small">
+      <span className="pill">holdout</span>{" "}
+      With the holdout on, the lines after the cutoff are not the 30 June forecast. Each week from
+      {" "}{day(h.rolling![0].week_start)}, both forecasters predicted the next 4 weeks from the data up
+      to that week (the ML model retrained each time); each point is that forecast per week.{" "}
+      <H2Sentence s={h.h2 ?? null} />
+    </p>
+  );
+}
+
+export function H2Sentence({ s }: { s: H2Score | null }) {
+  if (!s) return <>Every 4-week window had stock-out days, so there is no fair score for this drug.</>;
+  return <>
+    Over the {s.windows} four-week windows with no stock-out, the average miss was
+    {" "}<b>{num(s.miss_current)}</b> units for the current method
+    {s.miss_ml != null && <> and <b>{num(s.miss_ml)}</b> for the ML model; ML was closer
+      in {s.ml_closer} and the current method in {s.current_closer}</>}
+    {" "}(about {num(s.avg_sold)} sold per window). One drug is a small sample; judge the models
+    by the store-wide test.
+  </>;
+}
+
+const fmt = (v: number | null) => (v == null ? "–" : num(v));
 
 function Header({ page }: { page: DrugPage }) {
   const d = page.drug;
@@ -112,8 +200,9 @@ function Alternatives({ page }: { page: DrugPage }) {
     <section className="card stack" style={{ gap: 8 }}>
       <h2>Alternatives</h2>
       <p className="small">
-        Other drugs with the same active ingredients. When this one runs out, customers mostly
-        buy one of these instead.
+        Other drugs with the same active ingredients. When a drug runs out, about 30% of its lost
+        sales move to an alternative like these. It depends on the medicine: nearly all for
+        amlodipine, almost none for paracetamol.
       </p>
       {!alts.length ? <p className="small muted">None found.</p> : (
         <div className="table-wrap">

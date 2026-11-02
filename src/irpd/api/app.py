@@ -56,7 +56,43 @@ def create_app(agent: Path = holdout.AGENT, sealed_file: Path = holdout.SEALED,
             raise HTTPException(404, f"no drug {code!r}")
         # Display only: the agent never receives this part.
         page["holdout"] = sealed.drug_actuals(code, sealed_file) if holdout else None
+        if holdout:
+            page["holdout"]["h2"] = sealed.h2_scores(agent, sealed_file).get(code)
         return page
+
+    @lru_cache(maxsize=1)
+    def forecasts_cached(stamp: int) -> list[dict]:
+        with agent_con() as con:
+            return seen.forecast_list(con)
+
+    @app.get("/forecasts")
+    def forecasts(holdout: bool = False) -> dict:
+        """Every drug with both forecasts; with `holdout`, each one's H2 2025 score."""
+        from irpd.ml import serve
+
+        f = serve.FORECAST_FILE
+        rows = forecasts_cached(f.stat().st_mtime_ns if f.exists() else 0)
+        if holdout:  # display only: the agent never receives this part
+            scores = sealed.h2_scores(agent, sealed_file)
+            rows = [{**r, "h2": scores.get(r["code"])} for r in rows]
+        return {"as_of": config.CUTOFF.isoformat(), "drugs": rows}
+
+    @app.get("/forecasts/charts")
+    def forecast_charts(codes: str, holdout: bool = False) -> list[dict]:
+        """Small-chart data for up to 20 drugs, in the order given."""
+        out = []
+        for code in [c for c in codes.split(",") if c][:20]:
+            with agent_con() as con:
+                c = seen.chart(con, code)
+            if c is None:
+                continue
+            if holdout:
+                h = sealed.drug_actuals(code, sealed_file)
+                c["holdout"] = {k: h[k] for k in ("sales", "stockouts", "rolling")}
+            else:
+                c["holdout"] = None
+            out.append(c)
+        return out
 
     @app.get("/replay")
     def replay() -> dict:

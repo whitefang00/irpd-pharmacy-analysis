@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { ChatPage } from "./pages/Chat";
 import { DrugPageView } from "./pages/Drug";
+import { ForecastsPage } from "./pages/Forecasts";
 import { OverviewPage } from "./pages/Overview";
 import { ReplayPage } from "./pages/Replay";
 
-// Hash routes: #/  #/drug/CODE  #/replay  #/chat
+// Hash routes: #/  #/drug/CODE  #/forecasts  #/replay  #/chat
 function useRoute(): string[] {
   const read = () => window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   const [r, setR] = useState(read);
@@ -45,11 +46,13 @@ export function App() {
         <a className="brand" href="#/">Pharmacy analyst</a>
         {link("#/", "Overview", !page)}
         {link("#/drug", "Drugs", page === "drug")}
+        {link("#/forecasts", "Forecasts", page === "forecasts")}
         {link("#/replay", "Agent vs pharmacist", page === "replay")}
         {link("#/chat", "Chat", page === "chat")}
         <ThemeToggle />
       </nav>
       {page === "drug" ? <DrugPageView code={arg ? decodeURIComponent(arg) : undefined} />
+        : page === "forecasts" ? <ForecastsPage />
         : page === "replay" ? <ReplayPage />
         : page === "chat" ? <ChatPage />
         : <OverviewPage />}

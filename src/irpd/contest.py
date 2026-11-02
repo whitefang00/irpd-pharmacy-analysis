@@ -96,14 +96,16 @@ def window_tables(start: date, end: date, source: Path) -> duckdb.DuckDBPyConnec
 
 
 def load_window(start: date, end: date, agent: Path = holdout.AGENT,
-                uncensored: bool = True) -> replay.Holdout:
+                uncensored: bool = True, after_cutoff: bool = False) -> replay.Holdout:
     """`replay.load` for a window before the cutoff, from agent-visible data only.
 
     The policy stands on the day before `start`; the window's demand, stock
     and events come from the agent file. With `uncensored`, stock-out losses
     are added back as in `lost.uncensored_demand`, from history up to `end`.
+    `after_cutoff` allows a later window when `agent` is the full warehouse
+    (evaluation only: diagnostic windows in H2 2025).
     """
-    if end > config.CUTOFF:
+    if end > config.CUTOFF and not after_cutoff:
         raise ValueError(f"a backtest window must end by the cutoff, not {end}")
     day = start - timedelta(days=1)
     with holdout.agent_view(day, agent) as past, holdout.agent_view(end, agent) as now, \
@@ -265,13 +267,28 @@ def assign(knobs: dict[str, Any], f: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def to_policy(knobs: dict[str, Any], b: Basis) -> pd.DataFrame:
+def window_var_factor(days: np.ndarray, tier: pd.Series | np.ndarray,
+                      rho: dict[str, float] | None) -> np.ndarray:
+    """1 + rho_tier (w - 1) for a window of `days` (w = days / 7, at least 1 week).
+
+    Weekly errors are positively correlated, so the variance of a w-week total
+    grows faster than w. No rho (or a tier missing from it) gives 1.
+    """
+    if not rho:
+        return np.ones(len(days))
+    r = pd.Series(np.asarray(tier, dtype=object)).map(rho).fillna(0).to_numpy(float)
+    return 1 + r * (np.maximum(np.asarray(days, float) / 7, 1) - 1)
+
+
+def to_policy(knobs: dict[str, Any], b: Basis,
+              rho: dict[str, float] | None = None) -> pd.DataFrame:
     """The replay policy (`plan.POLICY_COLUMNS`) the knobs give on the basis day.
 
     s and S are forecast quantiles as in `plan.reorder_rows`, at each drug's
     own service level and cycle; the floor levels are days of floor sales (the
     forecast daily mean where the floor sold nothing lately). A stopped drug
-    never orders (s = -1).
+    never orders (s = -1). `rho` (tier -> rho) scales each window's summed
+    variance by `window_var_factor`; None keeps the plain recipe.
     """
     f, a = b.facts, assign(knobs, b.facts)
     lead = f.lead_days.to_numpy(int)
@@ -279,6 +296,9 @@ def to_policy(knobs: dict[str, Any], b: Basis) -> pd.DataFrame:
     sl = a.service_level.to_numpy(float)
     m_l, v_l = plan._window_sum(b.mean, lead), plan._window_sum(b.var, lead)
     m_s, v_s = plan._window_sum(b.mean, lead + cycle), plan._window_sum(b.var, lead + cycle)
+    if rho:
+        v_l = v_l * window_var_factor(lead, f.tier, rho)
+        v_s = v_s * window_var_factor(lead + cycle, f.tier, rho)
     s, S = np.zeros(len(f)), np.zeros(len(f))
     for q in np.unique(sl):
         i = sl == q

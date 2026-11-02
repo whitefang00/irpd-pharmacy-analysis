@@ -42,7 +42,14 @@ from irpd import config
 from irpd.tables.sales import tiers_sql
 
 # Eid al-Fitr, as set by Kemenag (see eda/demand.py). Add later years here.
-EID = [date(2023, 4, 22), date(2024, 4, 10), date(2025, 3, 31)]
+# 2026 and 2027 are the expected dates (1 Syawal 1447 and 1448 H); Kemenag fixes
+# each at its isbat a day or two before, so either may move by a day.
+EID = [date(2023, 4, 22), date(2024, 4, 10), date(2025, 3, 31),
+       date(2026, 3, 20), date(2027, 3, 10)]
+# The list the ML system was frozen with (lab/ml-frozen.json). Only the ML's
+# legacy `c_eid_days` reads it, so the frozen control stays reproducible; the
+# later dates fall outside the data, so nothing else changes before 2026.
+EID_LEGACY = EID[:3]
 EID_DAYS = range(-7, 29)  # days around Eid that get their own uplift factor (FINDINGS.md)
 EID_BASE = range(-63, -14)  # the normal days each Eid is compared with
 
@@ -53,6 +60,12 @@ DISPERSION_WEEKS = 52
 # about 10% high in Eid weeks), so only this share of it is applied. Set on the
 # 2024 origins, where it brought Eid-week bias to about 1.0.
 EID_SHRINK = 0.6
+# The Eid profile: 'lines' (the default above) or 'units', the store's daily
+# units over the same weekday's normal, unshrunk (experiment E3). Lines put
+# more of the uplift after Eid than units do, which put the 2025 peak a week
+# late: units peak in days -7..-1, lines in days +1..+6.
+EID_PROFILES = ("lines", "units")
+EID_UNIT_SHRINK = 1.0
 
 # Chosen on the 2024 backtest origins and checked on H1 2025. Among methods
 # with little bias, the lowest WAPE; Croston-SBA is a hair lower on fast drugs
@@ -75,7 +88,8 @@ def load_history(con: duckdb.DuckDBPyConnection, until: date,
     """Weekly units per drug for weeks ended by `until`, with censored weeks marked.
 
     Returns {'drugs', 'weeks' (week starts), 'y' (units, NaN before the first
-    sale), 'out' (week had a stock-out day), 'lines' (store-wide sale lines)}.
+    sale), 'out' (week had a stock-out day), 'lines' (store-wide sale lines
+    per day), 'store_units' (store-wide units per day)}.
     """
     only = ""
     if drug_codes is not None:
@@ -96,7 +110,7 @@ def load_history(con: duckdb.DuckDBPyConnection, until: date,
         WHERE week_end <= {_d(until)} ORDER BY 1""").df()
     weeks = pd.to_datetime(weeks.week_start).dt.date.to_numpy()
     lines = con.execute(f"""
-        SELECT date, sum(lines) AS lines FROM daily_demand
+        SELECT date, sum(lines) AS lines, sum(units) AS units FROM daily_demand
         WHERE date <= {_d(weeks[-1] + timedelta(days=6) if len(weeks) else until)}
         GROUP BY 1 ORDER BY 1""").df()
     drugs = np.array(sorted(set(wk.drug_code) | set(drug_codes or [])), dtype=object)
@@ -106,24 +120,29 @@ def load_history(con: duckdb.DuckDBPyConnection, until: date,
     o = (out.assign(week_start=pd.to_datetime(out.week_start).dt.date, v=True)
          .pivot(index="drug_code", columns="week_start", values="v")
          .reindex(index=drugs, columns=weeks).notna().to_numpy())
+    day = pd.to_datetime(lines.date).dt.date
     return {"drugs": drugs, "weeks": weeks, "y": y, "out": o,
-            "lines": pd.Series(lines.lines.to_numpy(float),
-                               index=pd.to_datetime(lines.date).dt.date)}
+            "lines": pd.Series(lines.lines.to_numpy(float), index=day),
+            "store_units": pd.Series(lines.units.to_numpy(float), index=day)}
 
 
 def _slice(h: dict, n_weeks: int) -> dict:
     """The history cut to its first `n_weeks` weeks (for backtest origins)."""
-    return {"drugs": h["drugs"], "weeks": h["weeks"][:n_weeks], "y": h["y"][:, :n_weeks],
-            "out": h["out"][:, :n_weeks],
-            "lines": h["lines"][h["lines"].index <= h["weeks"][n_weeks - 1] + timedelta(days=6)]}
+    end = h["weeks"][n_weeks - 1] + timedelta(days=6)
+    out = {"drugs": h["drugs"], "weeks": h["weeks"][:n_weeks], "y": h["y"][:, :n_weeks],
+           "out": h["out"][:, :n_weeks], "lines": h["lines"][h["lines"].index <= end]}
+    if "store_units" in h:
+        out["store_units"] = h["store_units"][h["store_units"].index <= end]
+    return out
 
 
-def eid_factors(lines: pd.Series) -> dict[int, float]:
+def eid_factors(lines: pd.Series, shrink: float = EID_SHRINK) -> dict[int, float]:
     """Uplift per day relative to Eid, from the Eids whose base days are in `lines`.
 
-    `lines` is store-wide sale lines per day. Each day in the window is divided
-    by the mean of the same weekday over EID_BASE days before Eid, then
-    averaged over the Eids seen. Days not yet seen for any Eid get no factor.
+    `lines` is store-wide sale lines (or units) per day. Each day in the window
+    is divided by the mean of the same weekday over EID_BASE days before Eid,
+    then averaged over the Eids seen. Days not yet seen for any Eid get no
+    factor. Only `shrink` of the uplift is kept.
     """
     ratios: dict[int, list[float]] = {}
     for eid in EID:
@@ -136,7 +155,20 @@ def eid_factors(lines: pd.Series) -> dict[int, float]:
             d = eid + timedelta(days=k)
             if d in lines.index or d <= lines.index.max():
                 ratios.setdefault(k, []).append(lines.get(d, 0.0) / by_weekday[d.weekday()])
-    return {k: 1 + EID_SHRINK * (float(np.mean(r)) - 1) for k, r in ratios.items()}
+    return {k: 1 + shrink * (float(np.mean(r)) - 1) for k, r in ratios.items()}
+
+
+def eid_profile(hist: dict, profile: str = "lines") -> dict[int, float]:
+    """The day factors `predict` uses: from store lines (shrunk) or store units (unshrunk).
+
+    Either way they come from the history as cut, so only Eids seen by its
+    last day count.
+    """
+    if profile == "lines":
+        return eid_factors(hist["lines"])
+    if profile == "units":
+        return eid_factors(hist["store_units"], EID_UNIT_SHRINK)
+    raise ValueError(f"profile must be one of {EID_PROFILES}")
 
 
 def eid_index(weeks, factors: dict[int, float]) -> np.ndarray:
@@ -203,6 +235,26 @@ def _mean_last(y: np.ndarray, n: int = 8) -> np.ndarray:
     keep = seen & (rank <= n)
     with np.errstate(invalid="ignore"):
         return np.where(keep, y, 0).sum(1) / keep.sum(1)
+
+
+# TSB for fading drugs (experiment E5): the chance of a sale decays with every
+# observed zero week. Separate smoothing for that chance and for the sale size.
+TSB_ALPHA_P = 0.15
+TSB_ALPHA_D = 0.10
+
+
+def tsb(hist: dict, horizon: int, alpha_p: float = TSB_ALPHA_P,
+        alpha_d: float = TSB_ALPHA_D) -> dict:
+    """TSB weekly mean and variance per drug (flat over `horizon`), on uncensored weeks.
+
+    The variance is the usual recipe: mean x the drug's dispersion over its
+    last year of observed weeks. `rate` is the one weekly level per drug.
+    """
+    y = np.where(hist["out"], np.nan, hist["y"])
+    rate = np.nan_to_num(_tsb(y, a=alpha_d, b=alpha_p))
+    mean = np.repeat(rate[:, None], horizon, axis=1)
+    disp = dispersion(y)
+    return {"mean": mean, "var": mean * disp[:, None], "rate": rate, "disp": disp}
 
 
 # Each maps weekly units (NaN = unobserved) to one level per drug.
@@ -287,18 +339,19 @@ def _z(q: float) -> float:
     return -x if q < 0.5 else x
 
 
-def predict(hist: dict, method: np.ndarray, horizon: int) -> dict:
+def predict(hist: dict, method: np.ndarray, horizon: int, eid: str = "lines") -> dict:
     """Mean and variance per drug and future week, one method per drug.
 
     `method` names a LEVEL_METHODS entry, 'snaive' (same week a year back)
     or 'zero'. A '+eid' suffix fits on Eid-adjusted history and scales the
-    forecast by the target week's Eid factor.
+    forecast by the target week's Eid factor. `eid` picks the day profile
+    behind those factors (`eid_profile`); 'lines' is the shipped forecaster.
     """
     y = np.where(hist["out"], np.nan, hist["y"])
     weeks = hist["weeks"]
     last = weeks[-1] if len(weeks) else _monday(config.FIRST_DAY) - timedelta(weeks=1)
     future = [last + timedelta(weeks=h + 1) for h in range(horizon)]
-    factors = eid_factors(hist["lines"])
+    factors = eid_profile(hist, eid)
     past_f, future_f = eid_index(weeks, factors), eid_index(future, factors)
     adj = y / past_f
 
@@ -313,7 +366,7 @@ def predict(hist: dict, method: np.ndarray, horizon: int) -> dict:
             mean[rows] = level[:, None] * (future_f if eid else np.ones(horizon))[None, :]
     mean = np.nan_to_num(np.maximum(mean, 0))
     disp = dispersion(adj)
-    return {"future": future, "mean": mean, "var": mean * disp[:, None]}
+    return {"future": future, "mean": mean, "var": mean * disp[:, None], "disp": disp}
 
 
 def tiers(con: duckdb.DuckDBPyConnection, as_of: date) -> dict[str, str]:
@@ -321,23 +374,62 @@ def tiers(con: duckdb.DuckDBPyConnection, as_of: date) -> dict[str, str]:
     return dict(con.execute(f"SELECT drug_code, tier FROM ({tiers_sql(as_of)})").fetchall())
 
 
+FORECASTERS = ("current", "ml")
+
+
+def _ml_means(as_of: date, drugs: np.ndarray, future: list[date], tier: np.ndarray,
+              mean: np.ndarray, method: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Swap in the saved ML forecasts (`irpd.ml.serve`) where there are any.
+
+    Weeks past the saved ones repeat the last saved week. Drugs with no saved
+    forecast (no sale in the 52 weeks before `as_of`) keep the current
+    method's forecast and name.
+    """
+    from irpd.ml import serve
+
+    saved = serve.load(as_of)
+    if saved is None:
+        raise FileNotFoundError(f"no ML forecasts saved for {as_of}; run `irpd ml serve`")
+    weeks = [w for w in future if w in saved.columns]
+    if not weeks or weeks[0] != future[0]:
+        raise ValueError(f"saved ML forecasts start {min(saved.columns)}, "
+                         f"not {future[0]}; rerun `irpd ml serve`")
+    m = saved.reindex(index=list(drugs), columns=weeks).to_numpy(float)
+    m = np.concatenate([m, np.repeat(m[:, -1:], len(future) - len(weeks), axis=1)], axis=1)
+    use = ~np.isnan(m).any(axis=1) & (tier != "none")
+    mean, method = mean.copy(), method.copy()
+    mean[use] = m[use]
+    method[use] = "ml"
+    return mean, method
+
+
 def forecast(con: duckdb.DuckDBPyConnection, drug_codes: list[str] | None, as_of: date,
-             horizon_weeks: int = 8) -> pd.DataFrame:
+             horizon_weeks: int = 8, forecaster: str = "current") -> pd.DataFrame:
     """Weekly demand forecasts from data up to `as_of`.
 
     `drug_codes=None` forecasts every drug with a sale by `as_of`. Returns one
     row per drug and week: drug_code, week_start, week_end, mean, var, p50,
     p90, tier, method. Drugs with no sale by `as_of` get zeros, tier 'none'.
+
+    `forecaster="ml"` takes the means from the saved ML forecasts (method
+    'ml'); the spread is the same recipe either way: variance = mean x the
+    drug's own dispersion.
     """
+    if forecaster not in FORECASTERS:
+        raise ValueError(f"forecaster must be one of {FORECASTERS}")
     hist = load_history(con, as_of, drug_codes)
     tier_of = tiers(con, as_of)
     tier = np.array([tier_of.get(c, "none") for c in hist["drugs"]], dtype=object)
     method = np.array([METHOD_BY_TIER.get(t, "snaive") for t in tier], dtype=object)
     p = predict(hist, method, horizon_weeks)
+    mean = p["mean"]
+    if forecaster == "ml":
+        mean, method = _ml_means(as_of, hist["drugs"], p["future"], tier, mean, method)
 
-    n, h = p["mean"].shape
+    n, h = mean.shape
     week_start = np.tile(np.array(p["future"], dtype=object), n)
-    mean, var = p["mean"].ravel(), p["var"].ravel()
+    var = (mean * p["disp"][:, None]).ravel()
+    mean = mean.ravel()
     return pd.DataFrame({
         "drug_code": np.repeat(hist["drugs"], h),
         "week_start": week_start,

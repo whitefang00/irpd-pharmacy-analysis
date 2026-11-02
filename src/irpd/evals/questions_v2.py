@@ -294,7 +294,8 @@ def _(con):
 
 
 def _forecast_total(con: Con, drug: str) -> float:
-    return plan_tools.forecast(con, [drug], 4)["forecasts"][0]["total_mean"]
+    # The current method's total: the default forecaster (the ML one is shown beside it).
+    return plan_tools.forecast(con, [drug], 4)["forecasts"][0]["current"]["total_mean"]
 
 
 @q("tl_forecast_teamic", "tools", "How many Teamic 500mg will we sell in the next 4 weeks?",

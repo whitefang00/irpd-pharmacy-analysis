@@ -238,3 +238,4 @@ label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13
 .bubble.a.prose { white-space: normal; display: grid; gap: 10px; }
 .prose ul { margin: 4px 0 0; padding-left: 20px; }
 .prose li + li { margin-top: 2px; }
+.linkish:disabled { color: var(--muted); cursor: default; }

@@ -104,16 +104,12 @@ def ledger(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def mapped(tmp_path_factory):
-    mp = pytest.MonkeyPatch()
-    mp.setattr(ingredients, "MAP", write_map(tmp_path_factory.mktemp("map") / "map.csv"))
-    yield
-    mp.undo()
-
-
-@pytest.fixture(scope="module")
-def db(ledger, mapped, tmp_path_factory) -> Path:
-    return warehouse.build(ledger, tmp_path_factory.mktemp("wh") / "lost.duckdb")
+def db(ledger, tmp_path_factory) -> Path:
+    # Swap in the test ingredient map only while this warehouse builds, so a
+    # real-data warehouse built later in the session gets the real map.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(ingredients, "MAP", write_map(tmp_path_factory.mktemp("map") / "map.csv"))
+        return warehouse.build(ledger, tmp_path_factory.mktemp("wh") / "lost.duckdb")
 
 
 @pytest.fixture(scope="module")
@@ -191,6 +187,11 @@ def test_fake_spells_recover_steady_sales(db):
     # estimate is within a few percent.
     assert (c.expected / c.actual - 1).abs().max() < 0.05
     assert lost.fake_score(fake).loc["fast", "spells"] == len(fake)
+
+
+@pytest.fixture
+def mapped(monkeypatch, tmp_path):
+    monkeypatch.setattr(ingredients, "MAP", write_map(tmp_path / "map.csv"))
 
 
 def _rows(df: pd.DataFrame) -> list:

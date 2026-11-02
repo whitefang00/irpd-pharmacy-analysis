@@ -48,7 +48,12 @@ def test_search_returns_tier_revenue_and_ingredients(client):
 def test_drug_page_shows_only_what_the_agent_saw(client):
     page = client.get("/drugs/A").json()
     assert page["holdout"] is None
+    # The forecast's future weeks are predictions, not data; everything else ends by the cutoff.
+    fc = page.pop("forecast")
     assert max(_dates(page)) == CUTOFF
+    assert fc["ml"] is None  # none saved in tests
+    assert min(_dates(fc["current"])) == CUTOFF  # the first forecast week starts on it
+    assert len(fc["current"]["weekly"]) == fc["weeks"] == 8
     assert page["stock"][-1]["date"] == CUTOFF and page["stock"][-1]["floor"] == 600 - 2 * 91
     assert page["purchases"][0] == {"date": "2025-04-01", "qty": 600, "supplier": "Sup X",
                                     "location": "floor"}
@@ -230,3 +235,34 @@ def test_one_chat_at_a_time(live):
     with chat._busy:
         ev = _events(app.post("/chat", json={"question": "x"}, headers=SSE))
     assert ev[0][0] == "error" and ev[0][1]["code"] == "busy" and not fake.requests
+
+
+def test_forecasts_list_and_charts(client):
+    r = client.get("/forecasts").json()
+    assert r["as_of"] == CUTOFF and [d["code"] for d in r["drugs"]][0] == "A"
+    a = r["drugs"][0]
+    assert a["next_current"] > 0 and a["total_current"] >= a["next_current"]
+    assert a["next_ml"] is None and "h2" not in a  # no ML saved; no holdout asked
+    held = client.get("/forecasts", params={"holdout": "true"}).json()["drugs"][0]
+    assert held["h2"] is None  # no rolling forecasts saved in tests
+    charts = client.get("/forecasts/charts", params={"codes": "A,nope,B"}).json()
+    assert [c["drug"]["code"] for c in charts] == ["A", "B"]
+    c = charts[0]
+    assert c["holdout"] is None and len(c["current"]["weekly"]) == 1
+    assert c["current"]["weekly"][0]["week_start"] == CUTOFF
+    assert max(_dates({k: c[k] for k in ("sales", "stockouts")})) <= CUTOFF
+    h = client.get("/forecasts/charts", params={"codes": "A", "holdout": "true"}).json()[0]
+    assert min(_dates(h["holdout"]["sales"])) > CUTOFF and h["holdout"]["rolling"] is None
+
+
+def test_h2_scores_compare_each_4_week_forecast_with_what_sold(client):
+    from irpd.ml import rolling
+
+    # Drug A sells 2 a day, so 56 in any 4 weeks; the first window starts on the cutoff.
+    rolling.FILE.write_text("origin,week_start,drug_code,current,ml\n"
+                            f"2025-06-29,{CUTOFF},A,56,50\n"
+                            "2025-07-06,2025-07-07,A,60,56\n")
+    s = client.get("/forecasts", params={"holdout": "true"}).json()["drugs"][0]["h2"]
+    assert s == {"windows": 2, "avg_sold": 56.0, "miss_current": 2.0, "miss_ml": 3.0,
+                 "ml_closer": 1, "current_closer": 1}
+    assert client.get("/drugs/A", params={"holdout": "true"}).json()["holdout"]["h2"] == s

@@ -7,12 +7,12 @@ export function OverviewPage() {
   return (
     <div className="stack" style={{ gap: 28 }}>
       <section className="stack" style={{ gap: 12 }}>
-        <h1>An AI analyst for a real pharmacy's stock</h1>
+        <h1>Where a real pharmacy loses sales</h1>
         <p className="hero">
-          It read two and a half years of one Indonesian pharmacy's stock ledger. It found which
-          stock-outs cost sales and when customers just bought another brand, and caught sales
-          lost to an empty shelf while stock sat upstairs. Then it was tested against the
-          pharmacist's own decisions on six months it never saw.
+          A study of two and a half years of one Indonesian pharmacy's sales and stock ledger:
+          which stock-outs and empty shelves cost sales, and when customers just bought another
+          brand. Reorder policies were tested against the pharmacist's own habits on six months
+          kept sealed until scoring. An AI assistant answers questions on the data.
         </p>
         <p className="lede small">
           Data: the IRPD dataset (CC BY 4.0). It covers one retail pharmacy in Central Java, with
@@ -20,6 +20,21 @@ export function OverviewPage() {
           at selling price. The agent sees data up to {o ? day(o.as_of) : "30 Jun 2025"}. The
           second half of 2025 is held back for scoring.
         </p>
+      </section>
+
+      <section className="card stack" style={{ gap: 8 }}>
+        <h2>What it found</h2>
+        <ul className="small">
+          <li><b>2.75% of revenue was lost</b> to stock-outs and empty shelves (Rp 194M, Oct 2023 to
+            the cutoff). Only about 30% of those lost sales moved to another brand of the same
+            medicine, so about 2.3% was truly lost.</li>
+          <li><b>Consistent reorder rules beat habit, with or without AI.</b> On the sealed H2 2025,
+            a textbook rule lost 62% less revenue than a copy of the pharmacist's habits. The AI
+            agent's policy lost 63% less, a tie. It pulled ahead only on empty shelves.</li>
+          <li><b>Better forecasting barely helps.</b> A machine-learning model was only slightly more
+            accurate than simple smoothing. Outside Eid, weekly demand is mostly random, so the
+            forecasts are nearly flat and the safety buffer does the work.</li>
+        </ul>
       </section>
 
       {error && <p className="error">{error}</p>}
@@ -67,7 +82,9 @@ export function OverviewPage() {
 
           <section className="tiles">
             <Link href="#/replay" title="Agent vs pharmacist"
-                  text="Reorder policies replayed on July–December 2025 and scored against what the pharmacist did." />
+                  text="Reorder policies replayed on July–December 2025 and scored against a copy of the pharmacist's habits." />
+            <Link href="#/forecasts" title="Forecasts"
+                  text="Both forecasters for every drug, and how each did on H2 2025." />
             <Link href="#/drug" title="A drug's stock line"
                   text="Floor and store stock, stock-outs and shelf-outs, deliveries and sales." />
             <Link href="#/chat" title="Ask the agent"

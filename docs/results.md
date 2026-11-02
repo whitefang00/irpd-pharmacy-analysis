@@ -74,6 +74,22 @@ the same replay, at the same stock value. The ledger is a reference only.
   with 6,011 shelf-out days.
 - Luna beat the mimic on stock-outs and lost revenue but lost badly on
   shelf-outs. Its written rationale misread its own backtest.
+- The main lesson is about rules, not AI. The textbook rule, with no LLM, gets
+  almost all of the gain over the mimic on lost revenue (Rp 4.4M vs 11.5M).
+  What the LLM added is mostly the floor rule behind the shelf-out column.
+- Each policy is set once, on the policy day, and held for six months. Only the
+  first four weeks of the forecast enter it. Re-planning every 14 days instead
+  cut lost revenue by 10-25% across three half-years in a follow-up test ([eda/followup](../eda/followup/)), mostly
+  through fresher floor levels. So the absolute numbers here are for a
+  set-and-forget policy.
+- Rescaling every policy to the pharmacist's stock value multiplies its reorder
+  levels by about 1.9, so the nominal 95% service level runs at about 99%. This
+  hides overall bias: in the follow-up test, cutting every forecast by 20%
+  changed matched lost revenue by under 1%.
+- For the same reasons the replay has little power to separate close methods.
+  In the follow-up test, a forecast made 30% worse was flagged as worse in only
+  1 of 10 bootstrap runs. The gap between habit and any consistent rule is
+  large enough to show. Gaps between forecasters are not.
 
 The in-sample backtests predicted the holdout well. Sol had 0.33x to 0.45x
 the mimic's stock-out days in-sample, and 0.46x on the holdout.
@@ -113,6 +129,57 @@ It depends a lot on the ingredient. Amlodipine (100%), simvastatin (92%) and
 omeprazole (85%) switch almost fully. Paracetamol (2%), amoxicillin (0%) and
 salbutamol (0%) barely switch. The EDA's earlier 84% came from a narrow group
 of fast drugs with hand-made mappings; see [FINDINGS.md](../FINDINGS.md).
+
+## Forecasting
+
+The app has two forecasters of weekly demand, one to eight weeks ahead.
+
+- The current method smooths each drug's own sales and adds a store-wide Eid
+  lift (seasonal naive for rare drugs).
+- The ML model is one LightGBM model trained on every drug at once. It uses
+  sales history, stock-outs, price, store traffic and the calendar.
+
+The ML setup was fixed in advance: every choice was made on 2024 forecast dates,
+then frozen and scored once on 2025. It was only slightly better.
+
+- On the 2024 dates its error (WAPE) was 0.451, against 0.468 for the best
+  simple method.
+- On 2025 it was a little better than the current method in every tier, but no
+  gap was clearly outside the noise.
+- In the H1 2025 replay its lost revenue was within 0.4% of the simple methods,
+  with fewer stock-out days (271 against 294 for the current method).
+- Features built from a drug's ingredient group made it slightly worse.
+
+By the rule set before the test, the current method stays the default. The app
+shows both.
+
+**Why the forecasts are nearly flat.** Outside Eid, the only inputs that
+change across the eight weeks are calendar features, so the forecast path is
+close to a straight line. That is the right answer for this data. A follow-up
+analysis on 2024 found the following:
+
+- Outside Eid, week-to-week variation is about what a steady rate of customers
+  buying random pack sizes would produce (0.94-0.98 of that, by tier).
+- About 82% of a flat forecast's error is this noise. The rest is getting the
+  drug's level wrong.
+- Recent jumps partly reverse rather than continue, so chasing them makes
+  forecasts worse.
+
+The reorder rule handles the noise by ordering up to the 95th percentile of
+demand over the lead time, not up to the average.
+
+**Known gaps.** Both forecasters put the 2025 Eid peak a week late. A units-based
+Eid profile for the current method puts it in the right week, but overshoots
+Eid 2024, so it stays off by default. The Eid list now includes the expected
+2026 and 2027 dates; Kemenag fixes each a day or two before, so check them.
+The frozen ML model keeps its original list. Large one-off orders, such as a
+clinic buying in bulk, can't be forecast at all, because there are no customer
+IDs.
+
+The follow-up work behind this section is in
+[eda/followup](../eda/followup/): the demand patterns, why the forecasts are
+flat, how forecasts reach reorder decisions, and the fixes we tried. None of
+the fixes passed the test we set before running them.
 
 ## Evals
 
